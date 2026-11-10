@@ -55,20 +55,27 @@ UI actions ── trackEvent("sign_up_click" | …, params) ── dataLayer (on
 
 ## Events
 
-| Event                                 | Fires when                                                                                                                    | Parameters                                                                                          |
-| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `virtual_page_view` → GA4 `page_view` | A measured route is shown: first load, link, back/forward. Not on a repeat of the same page.                                  | `page_location`, `page_title`, `page_referrer`                                                      |
-| `sign_up_click`                       | A signed-out visitor clicks Get Started (nav, hero, closing section) or "Choose ‹plan›"                                       | `cta_id` (`get_started`, `choose_plan`), `cta_location`, `plan_tier`, `billing_period` (plans only) |
-| `sign_up_complete`                    | The server confirms the organisation was created (`POST /tenants` success after payment or trial mandate, or a resumed setup) | `plan_type` (`trial`/`paid`), `plan_tier`, `billing_period` (absent on resume)                      |
-| `pricing_view`                        | The pricing section reaches the upper 60% of the viewport (once per page view)                                                | none                                                                                                |
-| `cta_click`                           | Sign In (nav, mobile menu, closing section, footer), Explore the Platform (hero)                                              | `cta_id`, `cta_location`                                                                            |
-| `outbound_click`                      | A link to another site, or a `mailto:` link                                                                                   | `link_type` (`web`/`email`), `link_domain`, `link_url` (origin + path; no query, no email address)  |
+| Event                                 | Fires when                                                                                                                                                       | Parameters                                                                                          |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `virtual_page_view` → GA4 `page_view` | A measured route is shown: first load, link, back/forward. Not on a repeat of the same page.                                                                     | `page_location`, `page_title`, `page_referrer`                                                      |
+| `sign_up_click`                       | A signed-out visitor clicks Start Free Trial (nav, hero, closing section) or "Choose ‹plan›"                                                                     | `cta_id` (`start_trial`, `choose_plan`), `cta_location`, `plan_tier`, `billing_period` (plans only) |
+| `sign_up_complete`                    | The server confirms the organisation was created (`POST /tenants` success after payment or trial mandate, or a resumed setup)                                    | `plan_type` (`trial`/`paid`), `plan_tier`, `billing_period` (absent on resume)                      |
+| `free_trial_start`                    | Same moment as `sign_up_complete`, when the organisation was created on the free trial                                                                           | `plan_tier`, `billing_period`                                                                       |
+| `demo_request`                        | The server accepted a Book a Demo form (`POST /public/leads` → 201)                                                                                              | `form_type` = `demo`                                                                                |
+| `contact_submit`                      | The server accepted a Contact Sales / custom-solution form                                                                                                       | `form_type` (`sales`/`custom`)                                                                      |
+| `pricing_view`                        | The pricing section reaches the upper 60% of the viewport (once per page view)                                                                                   | none                                                                                                |
+| `cta_click`                           | Book a Demo (hero, closing, mobile menu, footer), Contact Sales and Get a Custom HRMS Solution (pricing, footer), Sign In, Explore the Platform (signed-in hero) | `cta_id`, `cta_location`                                                                            |
+| `outbound_click`                      | A link to another site, or a `mailto:` link                                                                                                                      | `link_type` (`web`/`email`), `link_domain`, `link_url` (origin + path; no query, no email address)  |
 
-Every custom event also carries `page_location` (sanitised). Not implemented,
-because the features don't exist: `demo_request` and `contact_submit` (the
-site has `mailto:` links only, measured as `outbound_click`). `login` is
-deliberately not sent: it measures employees using the product, not website
-visitors.
+Every custom event also carries `page_location` (sanitised). Conversions
+(`sign_up_complete`, `free_trial_start`, `demo_request`, `contact_submit`)
+fire only after the server confirms success, once per success: a failed or
+repeated submission sends nothing. No event carries anything a visitor typed.
+`login` is deliberately not sent: it measures employees using the product,
+not website visitors.
+
+The lead forms (`/book-demo`, `/contact`) are measured pages. Prospect details
+go only to Praesto's API (see docs/leads.md).
 
 ## GTM container configuration (manual)
 
@@ -77,14 +84,14 @@ Workspace**:
 
 **Variables › User-Defined › New › Data Layer Variable** (version 2). Create
 one for each of: `page_location`, `page_title`, `page_referrer`, `cta_id`,
-`cta_location`, `plan_tier`, `billing_period`, `plan_type`, `link_type`,
-`link_domain`, `link_url`. Name each one `DLV - <key>`.
+`cta_location`, `plan_tier`, `billing_period`, `plan_type`, `form_type`,
+`link_type`, `link_domain`, `link_url`. Name each one `DLV - <key>`.
 
 **Triggers › New › Custom Event:**
 
 1. `CE - virtual_page_view`: event name `virtual_page_view`.
 2. `CE - praesto events`: event name
-   `^(sign_up_click|sign_up_complete|pricing_view|cta_click|outbound_click)$`,
+   `^(sign_up_click|sign_up_complete|free_trial_start|demo_request|contact_submit|pricing_view|cta_click|outbound_click)$`,
    with **Use regex matching** ticked.
 
 **Tags › New:**
@@ -132,9 +139,13 @@ Then **Submit › Publish**.
 - **Configure tag settings › Redact data:** turn on email redaction, and add
   query parameters `access_token`, `token`, `code`.
 - **Data collection:** leave Google signals **off**.
-- **Key events:** mark `sign_up_complete`.
+- **Key events:** mark `sign_up_complete`, `free_trial_start`, `demo_request`
+  and `contact_submit` (each appears in Admin › Events after its first
+  occurrence; until then add it under Key events › New key event by name).
+  Leave click events (`sign_up_click`, `cta_click`) as ordinary events.
 - **Custom definitions › event-scoped custom dimensions:** `cta_id`,
-  `cta_location`, `plan_tier`, `billing_period`, `plan_type`, `link_type`.
+  `cta_location`, `plan_tier`, `billing_period`, `plan_type`, `form_type`,
+  `link_type`.
   (`link_domain`/`link_url` are built in.)
 - Optional: **Define internal traffic** for the office IP, with a data filter.
 

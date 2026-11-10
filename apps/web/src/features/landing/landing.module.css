@@ -1036,6 +1036,30 @@
 .check {
   color: var(--l-accent);
 }
+/* Pricing: Contact Sales and the custom-solution link, under the plans. */
+.salesRow {
+  margin: 32px auto 0;
+  padding-top: 28px;
+  max-width: 40em;
+  border-top: 1px solid var(--l-line, rgba(0, 0, 0, 0.08));
+  color: var(--l-ink-2);
+}
+.salesRow p {
+  margin: 0;
+}
+.salesRow .actions {
+  align-items: center;
+  margin-top: 16px;
+}
+.textLink {
+  color: var(--l-accent);
+  font-weight: 500;
+  text-decoration: none;
+  border-radius: 6px;
+}
+.textLink:hover {
+  text-decoration: underline;
+}
 .fine {
   margin: 24px auto 0;
   max-width: 40em;
@@ -1107,7 +1131,7 @@
 }
 .footerInner {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) repeat(4, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 2fr) repeat(5, minmax(0, 1fr));
   gap: 32px;
   max-width: var(--l-max);
   margin: 0 auto;

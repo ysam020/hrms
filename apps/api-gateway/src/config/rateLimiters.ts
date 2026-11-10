@@ -340,6 +340,23 @@ const applicationWriteLimiter = rateLimit({
   store: redisStore("rl:apply-write:"),
 });
 
+// The website's sales enquiry form stores personal details and sends two
+// emails per new lead, so it gets the tightest budget: 5 per IP per hour.
+const leadWriteLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: limitMax("LEAD_WRITE", 5),
+  keyGenerator: (req: any) =>
+    req.ip ? `ip:${ipKeyGenerator(req)}` : "ip:unknown",
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    message:
+      "Too many requests from this network. Try again later, or email hello@praesto.in.",
+  },
+  store: redisStore("rl:lead-write:"),
+});
+export const LEAD_WRITE_PATH = "/api/v1/public/leads";
+
 export const DRAFT_RECOVERY_REGEX =
   /^\/api\/v1\/public\/careers\/[^/]+\/jobs\/[^/]+\/drafts\/recover/;
 const APPLICATION_WRITE_REGEX =
@@ -353,6 +370,9 @@ export function applyRateLimiters(app: Application) {
   // Stricter budgets on top of the public one for the careers routes that
   // write or send email.
   app.use(DRAFT_RECOVERY_REGEX, draftRecoveryLimiter);
+  app.use(LEAD_WRITE_PATH, (req, res, next) =>
+    req.method === "POST" ? leadWriteLimiter(req, res, next) : next(),
+  );
   app.use((req, res, next) =>
     isApplicationWrite(req.method, req.originalUrl)
       ? applicationWriteLimiter(req, res, next)

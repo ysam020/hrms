@@ -41,6 +41,7 @@ import { helpdeskRouter } from "./helpdesk";
 import { reportsRouter } from "./reports";
 import { supportRouter, platformSupportRouter } from "./support";
 import { platformAdminRouter } from "./platformAdmin";
+import { publicLeadsRouter } from "./publicLeads";
 import { defaultLimiter } from "../middleware/rateLimiter";
 import { requireActiveSubscription } from "../middleware/requireActiveSubscription";
 import { idempotency } from "../middleware/idempotency";
@@ -82,6 +83,10 @@ rootRouter.use(paymentRouter);
 // limiting is already applied globally by path regex (PUBLIC_ROUTES_REGEX in
 // config/rateLimiters.ts), so no limiter is attached here.
 rootRouter.use(publicRecruitmentRouter);
+
+// The website's sales enquiry form: anonymous like the careers pages, with
+// its own per-IP limit (leadWriteLimiter in config/rateLimiters.ts).
+rootRouter.use(publicLeadsRouter);
 
 // Support tickets to the Praesto team: tenant-scoped, but NOT behind the
 // subscription guard — an organisation whose subscription lapsed must still

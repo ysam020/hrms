@@ -97,8 +97,11 @@ const CONSENT_REQUIRED_REGIONS = [
 export type AnalyticsEvent =
   | "sign_up_click"
   | "sign_up_complete"
+  | "free_trial_start"
   | "pricing_view"
   | "cta_click"
+  | "demo_request"
+  | "contact_submit"
   | "outbound_click";
 
 export type CtaLocation =
@@ -107,11 +110,20 @@ export type CtaLocation =
   | "hero"
   | "pricing"
   | "closing"
-  | "footer";
+  | "footer"
+  | "lead_form";
 
 /** Every parameter any event may carry. Keep it free of personal data. */
 export type EventParams = {
-  cta_id?: "get_started" | "choose_plan" | "sign_in" | "explore_platform";
+  cta_id?:
+    | "get_started"
+    | "start_trial"
+    | "choose_plan"
+    | "sign_in"
+    | "explore_platform"
+    | "book_demo"
+    | "contact_sales"
+    | "custom_solution";
   cta_location?: CtaLocation;
   plan_tier?: string;
   billing_period?: "monthly" | "annual";
@@ -119,6 +131,8 @@ export type EventParams = {
   link_domain?: string;
   link_url?: string;
   link_type?: "web" | "email";
+  /** Lead forms: which form succeeded. Never any field the visitor typed. */
+  form_type?: "demo" | "sales" | "custom";
 };
 
 // Every push resets all parameter keys, so values from an earlier event
@@ -132,6 +146,7 @@ const PARAM_KEYS: (keyof EventParams)[] = [
   "link_domain",
   "link_url",
   "link_type",
+  "form_type",
 ];
 
 type Gtag = (...args: unknown[]) => void;

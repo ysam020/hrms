@@ -7,6 +7,13 @@ import {
   SUPPORT_PRIORITIES,
   SUPPORT_STATUSES,
 } from "./config/support";
+import {
+  COMPANY_SIZES,
+  LEAD_KINDS,
+  LEAD_STATUSES,
+  NOTE_MAX,
+  PREFERRED_TIMES,
+} from "./config/leads";
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -1195,3 +1202,77 @@ export const platformSyncSchema = z.object({
     .min(5, "Give a short reason (at least 5 characters)")
     .max(500),
 });
+
+// ── Sales leads (public form + Platform Console) ───────────────────────────
+// Rules and vocabulary: config/leads.ts.
+
+const objectId = z.string().regex(/^[a-f0-9]{24}$/i, "Invalid id");
+const leadText = (max: number) => z.string().trim().max(max);
+const optionalLeadText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .optional()
+    .transform((v) => (v ? v : undefined));
+
+export const publicLeadSchema = z
+  .object({
+    kind: z.enum(LEAD_KINDS),
+    name: leadText(100).min(2, "Enter your full name"),
+    email: z.string().trim().max(254).email("Enter a valid work email address"),
+    phone: optionalLeadText(20),
+    companyName: leadText(150).min(2, "Enter your company name"),
+    companySize: z.enum(COMPANY_SIZES, {
+      errorMap: () => ({ message: "Choose your company size" }),
+    }),
+    designation: optionalLeadText(100),
+    message: optionalLeadText(2000),
+    preferredDate: ymd.optional(),
+    preferredTime: z.enum(PREFERRED_TIMES).optional(),
+    consent: z.literal(true, {
+      errorMap: () => ({
+        message: "Confirm that Praesto may contact you about your request",
+      }),
+    }),
+    attribution: z.record(z.string().max(500)).optional(),
+    // Honeypot: a hidden field people never fill in. Accepted here so a bot
+    // gets the normal response; the handler discards the submission.
+    website: z.string().max(500).optional(),
+  })
+  .strict();
+
+export const platformLeadsQuerySchema = z
+  .object({
+    ...pageFields,
+    status: z.enum(LEAD_STATUSES).optional(),
+    kind: z.enum(LEAD_KINDS).optional(),
+    owner: z.union([z.literal("me"), z.literal("none"), objectId]).optional(),
+    from: ymd.optional(),
+    to: ymd.optional(),
+  })
+  .refine(
+    (q) => !q.from || !q.to || q.from <= q.to,
+    "The start date must be on or before the end date",
+  );
+
+const optionalDate = z
+  .union([z.string().datetime({ offset: true }), z.null()])
+  .optional();
+
+export const platformLeadUpdateSchema = z
+  .object({
+    status: z.enum(LEAD_STATUSES).optional(),
+    ownerId: z.union([objectId, z.null()]).optional(),
+    lastContactedAt: optionalDate,
+    nextFollowUpAt: optionalDate,
+  })
+  .strict()
+  .refine(
+    (b) => Object.values(b).some((v) => v !== undefined),
+    "Nothing to change",
+  );
+
+export const platformLeadNoteSchema = z
+  .object({ body: z.string().trim().min(1, "Write a note").max(NOTE_MAX) })
+  .strict();

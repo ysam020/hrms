@@ -472,6 +472,15 @@ const SUPPORT = {
   PLATFORM_ADMIN_REVENUE: (params = "") => `/platform/admin/revenue${params}`,
   PLATFORM_ADMIN_AUDIT: (page: number, limit: number) =>
     `/platform/admin/audit-logs?page=${page}&limit=${limit}`,
+  PLATFORM_ADMIN_LEADS: (params = "") => `/platform/admin/leads${params}`,
+  PLATFORM_ADMIN_LEAD: (id: string) => `/platform/admin/leads/${id}`,
+  PLATFORM_ADMIN_LEAD_NOTES: (id: string) =>
+    `/platform/admin/leads/${id}/notes`,
+  PLATFORM_ADMIN_LEAD_OWNERS: "/platform/admin/leads/owners",
+  PLATFORM_ADMIN_LEAD_METRICS: (params = "") =>
+    `/platform/admin/leads/metrics${params}`,
+  // The website's Book a Demo / Contact Sales form (anonymous).
+  PUBLIC_LEADS: "/public/leads",
 };
 
 const APPROVALS = {

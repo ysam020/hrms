@@ -519,3 +519,52 @@
   grid-template-columns: minmax(84px, auto) minmax(0, 1fr);
   gap: 6px;
 }
+
+/* ── Lead forms (LeadForm.tsx): Book a Demo, Contact Sales ── */
+.leadLede {
+  font: var(--px-type-body);
+  color: var(--px-text-2);
+  margin: var(--px-space-2) 0 var(--px-space-6);
+}
+.leadForm {
+  display: grid;
+  gap: var(--px-space-5);
+}
+.leadRow {
+  display: grid;
+  gap: var(--px-space-5);
+  grid-template-columns: 1fr;
+}
+@media (min-width: 640px) {
+  .leadRow {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.leadConsent {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--px-space-3);
+  font: var(--px-type-callout);
+  color: var(--px-text-2);
+}
+.leadConsent input {
+  margin-top: 2px;
+  flex: none;
+}
+.leadError {
+  margin: calc(-1 * var(--px-space-3)) 0 0;
+  font: var(--px-type-footnote, var(--px-type-callout));
+  color: var(--px-danger, #d70015);
+}
+/* Off-screen, not display:none (some bots skip hidden fields). */
+.leadHp {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+.leadDone {
+  display: grid;
+  gap: var(--px-space-3);
+}

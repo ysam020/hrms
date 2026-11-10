@@ -83,9 +83,11 @@ function apply(row: Row, data: Row, model: string) {
   for (const [k, v] of Object.entries(data)) {
     if (isPlainObject(v) && "increment" in v)
       row[k] = (row[k] ?? 0) + v.increment;
+    else if (isPlainObject(v) && "push" in v)
+      row[k] = [...(row[k] ?? []), structuredClone(v.push)];
     else if (v !== undefined) row[k] = v;
   }
-  if (model === "supportTicket") row.updatedAt = new Date();
+  if (model === "supportTicket" || model === "lead") row.updatedAt = new Date();
 }
 
 function model(name: string) {
@@ -145,6 +147,7 @@ const MODELS = [
   "supportAttachment",
   "supportActivity",
   "tenantMembership",
+  "lead",
 ];
 
 export const fakeDb: any = {

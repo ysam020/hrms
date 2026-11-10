@@ -26,14 +26,14 @@ datasource db {
 // ─── Tenant ───────────────────────────────────────────────────────────────────
 
 model Tenant {
-  id                     String    @id @default(auto()) @map("_id") @db.ObjectId
-  name                   String
-  slug                   String    @unique
-  dbName                 String?   @unique
-  plan                   String    @default("pro")
-  billing                String?
-  industry               String?
-  companySize            String?
+  id                             String    @id @default(auto()) @map("_id") @db.ObjectId
+  name                           String
+  slug                           String    @unique
+  dbName                         String?   @unique
+  plan                           String    @default("pro")
+  billing                        String?
+  industry                       String?
+  companySize                    String?
   // Intentionally NOT @unique here for the same reason as `domain` below:
   // Prisma's MongoDB connector doesn't emit sparse:true for optional
   // @unique fields (prisma/prisma#12827), so a plain unique index throws
@@ -43,8 +43,8 @@ model Tenant {
   // packages/database/src/ensureIndexes.ts, called once at gateway boot.
   // Prisma still maps the resulting duplicate-key error to P2002 on
   // tenant.create() even though the index isn't declared here.
-  razorpaySubscriptionId String?
-  lastChargePaymentId    String?
+  razorpaySubscriptionId         String?
+  lastChargePaymentId            String?
   // Set transiently during a payment-method swap (see confirmPaymentMethodChange
   // in payment.ts) to the subscription being retired; cleared once its
   // cancellation is confirmed. subscriptionReconciler.ts retries the cancel
@@ -58,68 +58,68 @@ model Tenant {
   // "expired" (involuntary lapse). "trialing" is a free trial whose Razorpay
   // subscription is authorised but not yet charged (start_at = trialEndsAt);
   // the first subscription.charged webhook moves it to "active".
-  subscriptionStatus     String    @default("active")
+  subscriptionStatus             String    @default("active")
   // Null until the first real charge — a trial isn't an activation.
-  planActivatedAt        DateTime?
+  planActivatedAt                DateTime?
   // During a trial this equals trialEndsAt, so the expiry, grace and
   // cancellation rules that key off it apply to trials unchanged.
-  planExpiresAt          DateTime?
+  planExpiresAt                  DateTime?
   // Server-set once, when a trial tenant is created (buildTenant in
   // tenant.ts); never changed afterwards, so they double as the record that
   // this organisation has had its one trial. Null for tenants that paid at
   // signup, including every tenant created before trials existed.
-  trialStartedAt         DateTime?
-  trialEndsAt            DateTime?
+  trialStartedAt                 DateTime?
+  trialEndsAt                    DateTime?
   // Reminder keys already sent ("3d", "1d") — claimed atomically by the
   // scheduler's sendTrialReminders job so a retry never emails twice.
-  trialRemindersSent     String[]  @default([])
+  trialRemindersSent             String[]  @default([])
   // "starter" (1-25 employees) | "growth" (26-100) | "enterprise" (101+) —
   // three flat-fee slabs, not per-employee billing. See
   // apps/api-gateway/src/config/billingPlans.ts for the actual prices.
-  planTier               String    @default("starter")
+  planTier                       String    @default("starter")
   // Set when a downgrade or billing-period change is requested — Razorpay is
   // told to apply it at the end of the current cycle (schedule_change_at:
   // "cycle_end"), and the subscription.charged webhook (or, as a fallback,
   // subscriptionReconciler.ts) copies these onto planTier/billing and clears
   // them once that cycle actually renews. Never applied immediately/prorated —
   // only tier upgrades on an unchanged billing period are.
-  pendingPlanTier        String?
-  pendingBilling         String?
+  pendingPlanTier                String?
+  pendingBilling                 String?
   // Mirrors planExpiresAt at the moment the change was scheduled — display-only,
   // Razorpay's own schedule (not this field) drives when the change lands.
-  pendingPlanChangeAt    DateTime?
+  pendingPlanChangeAt            DateTime?
   // Quantity Razorpay last charged on a per_seat subscription — carried onto
   // the renewal invoice PDF (see invoice.ts) since the webhook only has the
   // charged amount, not the headcount that produced it.
-  lastBilledQuantity     Int?
-  paymentMethod          String?   // card | upi | netbanking | emandate | wallet
-  paymentMethodSummary   String?   // e.g. "Visa •••• 1111" | "john@upi" | "HDFC Bank"
-  helpPhone              String?
-  helpEmail              String?
-  officeAddress          String?
+  lastBilledQuantity             Int?
+  paymentMethod                  String? // card | upi | netbanking | emandate | wallet
+  paymentMethodSummary           String? // e.g. "Visa •••• 1111" | "john@upi" | "HDFC Bank"
+  helpPhone                      String?
+  helpEmail                      String?
+  officeAddress                  String?
   // Tax Deduction and Collection Account Number — required on Form 16/Form
   // 24Q, printed on the annual Form 16 certificate (see form16.ts).
-  tan                    String?
-  website                String?
+  tan                            String?
+  website                        String?
   // Work-location state, for Professional Tax slab lookup — set once during
   // org setup and applied to every employee's PT deduction (see
   // apps/api-gateway/src/handlers/payroll.ts), rather than captured per employee.
-  workState              String?
+  workState                      String?
   // Corporate Identification Number, and branding/signatory details used on
   // generated documents (e.g. the offer letter PDF — see offerLetter.ts).
-  cin                    String?
-  logoUrl                String?
-  signatoryName          String?
-  signatoryDesignation   String?
+  cin                            String?
+  logoUrl                        String?
+  signatoryName                  String?
+  signatoryDesignation           String?
   // Company email domain, used to suggest joining an existing org instead of
   // creating a duplicate. Intentionally NOT @unique: Prisma does not emit
   // sparse:true for optional @unique fields on MongoDB (prisma/prisma#12827),
   // so a plain unique index throws E11000 on the second tenant ever created
   // with domain left null (e.g. a free-mail signup). "One tenant per domain"
   // is enforced in application code (buildTenant) instead — see tenant.ts.
-  domain                 String?
-  isActive               Boolean   @default(true)
-  createdAt              DateTime  @default(now())
+  domain                         String?
+  isActive                       Boolean   @default(true)
+  createdAt                      DateTime  @default(now())
 
   @@index([domain])
   @@map("tenants")
@@ -195,92 +195,92 @@ model PayoutTenantIndex {
 // ─── User ────────────────────────────────────────────────────────────────────
 
 model User {
-  id                          String    @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId                    String?   @db.ObjectId
-  username                    String    @unique
-  password                    String?
-  email                       String?   @unique
-  official_email              String?
+  id                            String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId                      String?   @db.ObjectId
+  username                      String    @unique
+  password                      String?
+  email                         String?   @unique
+  official_email                String?
   // The candidate's original application email (JobApplication.email),
   // copied over when HR links a hired candidate to this account during
   // join-request approval — see approveJoinRequest in handlers/tenant.ts.
   // `email` itself is the login identity (the company/OAuth email), so this
   // is the only place the pre-hire personal email is preserved on the
   // employee record directly.
-  personalEmail               String?
-  first_name                  String?
-  middle_name                 String?
-  last_name                   String?
-  mobile                      String?
-  dob                         DateTime?
-  blood_group                 String?
-  qualification               String?
-  role                        String[]
-  permissions                 String[]
-  isSuperUser                 Boolean   @default(false)
-  wfh                         Boolean   @default(false)
+  personalEmail                 String?
+  first_name                    String?
+  middle_name                   String?
+  last_name                     String?
+  mobile                        String?
+  dob                           DateTime?
+  blood_group                   String?
+  qualification                 String?
+  role                          String[]
+  permissions                   String[]
+  isSuperUser                   Boolean   @default(false)
+  wfh                           Boolean   @default(false)
   // WFH home location (set by admin when enabling WFH for this employee)
-  wfhHomeLatitude             Float?
-  wfhHomeLongitude            Float?
-  wfhHomeName                 String?   // human-readable address label
-  note                        String?
-  employeeStatus              String    @default("Active")
-  reasonForTermination        String?
-  dateOfTermination           DateTime?
-  dateOfAbscond               DateTime?
-  designation                 String?
-  department                  String?
+  wfhHomeLatitude               Float?
+  wfhHomeLongitude              Float?
+  wfhHomeName                   String? // human-readable address label
+  note                          String?
+  employeeStatus                String    @default("Active")
+  reasonForTermination          String?
+  dateOfTermination             DateTime?
+  dateOfAbscond                 DateTime?
+  designation                   String?
+  department                    String?
   // Optional FKs alongside the free-text strings above — kept free-text as
   // the source of truth so onboarding/employee-add never blocks on Org
   // Structure being configured. UI/reports prefer the resolved relation name
   // when set, else fall back to the string. See POST /org-structure/migrate-from-free-text.
-  departmentId                 String?   @db.ObjectId
-  designationId                String?   @db.ObjectId
+  departmentId                  String?   @db.ObjectId
+  designationId                 String?   @db.ObjectId
   // office (default, geofenced) | field | remote — field/remote skip geofencing entirely.
-  attendanceMode              String    @default("office")
+  attendanceMode                String    @default("office")
   payCycleId                    String?   @db.ObjectId
-  joining_date                DateTime?
-  employee_photo              String?
-  face_descriptor             Json?
+  joining_date                  DateTime?
+  employee_photo                String?
+  face_descriptor               Json?
   // Address
-  permanent_address_line_1    String?
-  permanent_address_line_2    String?
-  permanent_address_city      String?
-  permanent_address_state     String?
-  permanent_address_pincode   String?
+  permanent_address_line_1      String?
+  permanent_address_line_2      String?
+  permanent_address_city        String?
+  permanent_address_state       String?
+  permanent_address_pincode     String?
   communication_address_line_1  String?
   communication_address_line_2  String?
   communication_address_city    String?
   communication_address_state   String?
   communication_address_pincode String?
   // KYC documents
-  aadhar_no                   String?
-  aadhar_photo_front          String?
-  aadhar_photo_back           String?
-  pan_no                      String?
-  pan_photo                   String?
-  education_certificates      String[]
-  experience_certificate      String?
-  electricity_bill            String?
-  pf_no                       String?
-  uan_no                      String?
-  esic_no                     String?
-  bank_account_no             String?
-  bank_name                   String?
-  ifsc_code                   String?
-  kyc_date                    DateTime?
+  aadhar_no                     String?
+  aadhar_photo_front            String?
+  aadhar_photo_back             String?
+  pan_no                        String?
+  pan_photo                     String?
+  education_certificates        String[]
+  experience_certificate        String?
+  electricity_bill              String?
+  pf_no                         String?
+  uan_no                        String?
+  esic_no                       String?
+  bank_account_no               String?
+  bank_name                     String?
+  ifsc_code                     String?
+  kyc_date                      DateTime?
   // Pending | Approved | Revision Requested | Edit Requested
-  kyc_approval                String?
+  kyc_approval                  String?
   // {field_name: issue description} — set when kyc_approval == "Revision
   // Requested"; cleared when HR approves again (a resubmission alone does
   // not clear it, so HR always sees what they originally flagged).
-  kyc_revision_notes          Json?
+  kyc_revision_notes            Json?
   // Employee's own stated reason for wanting to edit an already-approved
   // KYC (e.g. "bank account changed"); set when kyc_approval == "Edit
   // Requested", cleared once HR allows editing (-> back to Pending) so it
   // never lingers into an unrelated future request.
-  kyc_edit_request_reason     String?
-  kyc_edit_requested_at       DateTime?
+  kyc_edit_request_reason       String?
+  kyc_edit_requested_at         DateTime?
   // "open" | "closed" | null. allowKycEdit sets "open" — the one edit that
   // reopen grants is allowed. submitKyc's self-submit path flips "open" to
   // "closed" the moment that edit lands, re-locking the record (still
@@ -288,10 +288,10 @@ model User {
   // self-submit (fresh onboarding, a Revision Requested resubmission)
   // recomputes this to null, so the lock never outlives the reopen it
   // belongs to. See allowKycEdit.ts / submitKyc.ts.
-  kyc_edit_window             String?
-  reference_by                String?
+  kyc_edit_window               String?
+  reference_by                  String?
   // Auth
-  refreshToken                String?
+  refreshToken                  String?
   // AES-encrypted (see @hrms/crypto's aesEncrypt/aesDecrypt, same pattern as
   // other sensitive fields) offline refresh token from the "Connect Google
   // Calendar" consent flow (distinct from the login OAuth flow — see
@@ -300,20 +300,19 @@ model User {
   // calendar when they schedule an interview. Per-user by design: each
   // connected user's events are created on their own calendar, never a
   // shared/tenant-level identity.
-  googleCalendarRefreshToken  String?
-  webAuthnCredentials         Json?
-  fcmTokens                   Json?
-  events                      Json?
-  createdAt                   DateTime? @default(now())
-  updatedAt                   DateTime? @updatedAt
+  googleCalendarRefreshToken    String?
+  webAuthnCredentials           Json?
+  fcmTokens                     Json?
+  events                        Json?
+  createdAt                     DateTime? @default(now())
+  updatedAt                     DateTime? @updatedAt
 
-  attendanceRecords           AttendanceRecord[]
-  leaveApplications           LeaveApplication[]
-  notifications               NotificationRecipient[]
-  salaryStructures            SalaryStructure[]
-  loginEvents                 LoginEvent[]
-  performanceReviews          PerformanceReview[]
-
+  attendanceRecords  AttendanceRecord[]
+  leaveApplications  LeaveApplication[]
+  notifications      NotificationRecipient[]
+  salaryStructures   SalaryStructure[]
+  loginEvents        LoginEvent[]
+  performanceReviews PerformanceReview[]
 
   @@index([employeeStatus])
   @@index([department, employeeStatus])
@@ -329,29 +328,29 @@ model User {
 // ─── Attendance ───────────────────────────────────────────────────────────────
 
 model AttendanceRecord {
-  id           String   @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId     String?  @db.ObjectId
-  userId       String   @db.ObjectId
-  date         DateTime
-  timeIn       DateTime?
-  timeOut      DateTime?
-  workingHours Float?
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId      String?   @db.ObjectId
+  userId        String    @db.ObjectId
+  date          DateTime
+  timeIn        DateTime?
+  timeOut       DateTime?
+  workingHours  Float?
   // Hours beyond TenantSettings.fullDayMinHours — see resolveOvertimeHours.
   // Only non-zero when overtimePreApprovalRequired is off, or an approved
   // OvertimeRequest exists for this user+date.
   overtimeHours Float?
-  status       String?
-  isCorrected  Boolean  @default(false)
-  correctedBy  String?  @db.ObjectId
+  status        String?
+  isCorrected   Boolean   @default(false)
+  correctedBy   String?   @db.ObjectId
 
-  user         User?    @relation(fields: [userId], references: [id])
-  breaks       AttendanceBreak[]
+  user   User?             @relation(fields: [userId], references: [id])
+  breaks AttendanceBreak[]
 
   @@unique([tenantId, userId, date])
-  @@index([tenantId, date])
   // Each tenant has its own database and tenant-routed queries carry no
   // tenantId filter, so the indexes those queries can use must not lead with it.
   @@unique([userId, date])
+  @@index([tenantId, date])
   @@index([date])
   @@map("attendance_records")
 }
@@ -369,7 +368,7 @@ model AttendanceBreak {
   endTime            DateTime?
   durationMinutes    Float?
 
-  record             AttendanceRecord @relation(fields: [attendanceRecordId], references: [id], onDelete: Cascade)
+  record AttendanceRecord @relation(fields: [attendanceRecordId], references: [id], onDelete: Cascade)
 
   @@index([attendanceRecordId])
   @@map("attendance_breaks")
@@ -396,26 +395,26 @@ model OvertimeRequest {
 // ─── Leave ────────────────────────────────────────────────────────────────────
 
 model LeaveApplication {
-  id                String   @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId          String?  @db.ObjectId
-  userId            String   @db.ObjectId
-  from              DateTime
-  to                DateTime
-  leaveType         String
-  days              Float
-  status            String   @default("Pending")
-  reason            String?
-  sickLeave         Boolean?
+  id                 String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId           String?   @db.ObjectId
+  userId             String    @db.ObjectId
+  from               DateTime
+  to                 DateTime
+  leaveType          String
+  days               Float
+  status             String    @default("Pending")
+  reason             String?
+  sickLeave          Boolean?
   medicalCertificate String?
-  appliedOn         DateTime?
-  approvedById      String?  @db.ObjectId
-  approvedOn        DateTime?
+  appliedOn          DateTime?
+  approvedById       String?   @db.ObjectId
+  approvedOn         DateTime?
 
   // Application unit — "full_day" is the legacy default. session is required
   // when unit=half_day; shortLeaveHours is required when unit=short_leave.
-  unit               String    @default("full_day") // full_day | half_day | short_leave
-  session            String?   // first_half | second_half
-  shortLeaveHours    Float?
+  unit            String  @default("full_day") // full_day | half_day | short_leave
+  session         String? // first_half | second_half
+  shortLeaveHours Float?
 
   // Cancellation-after-approval: status transitions to "Cancellation Requested"
   // then "Cancelled" once approved, at which point `days` is credited back to
@@ -425,7 +424,7 @@ model LeaveApplication {
   cancelledBy        String?   @db.ObjectId
   cancellationReason String?
 
-  user              User?    @relation(fields: [userId], references: [id])
+  user User? @relation(fields: [userId], references: [id])
 
   @@index([tenantId, userId])
   @@index([tenantId, status])
@@ -444,7 +443,7 @@ model CompOffCredit {
   id                       String    @id @default(auto()) @map("_id") @db.ObjectId
   tenantId                 String    @db.ObjectId
   userId                   String    @db.ObjectId
-  sourceDate               DateTime  // the worked holiday/weekend that earned it
+  sourceDate               DateTime // the worked holiday/weekend that earned it
   earnedDays               Float     @default(1)
   expiresOn                DateTime?
   status                   String    @default("available") // available | used | expired
@@ -457,10 +456,10 @@ model CompOffCredit {
 }
 
 model LeaveBalance {
-  id                              String   @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId                        String?  @db.ObjectId
-  userId                          String   @db.ObjectId
-  accumulatedPLBeforeCurrentMonth Float    @default(0)
+  id                              String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId                        String?   @db.ObjectId
+  userId                          String    @db.ObjectId
+  accumulatedPLBeforeCurrentMonth Float     @default(0)
   balances                        Json?
   createdAt                       DateTime? @default(now())
   updatedAt                       DateTime? @updatedAt
@@ -472,40 +471,40 @@ model LeaveBalance {
 // ─── Job Openings & Applications ─────────────────────────────────────────────
 
 model JobOpening {
-  id                 String    @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId           String?   @db.ObjectId
-  jobTitle           String
-  numberOfVacancies  Int?
-  jobPostingDate     DateTime? @default(now())
+  id                  String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId            String?   @db.ObjectId
+  jobTitle            String
+  numberOfVacancies   Int?
+  jobPostingDate      DateTime? @default(now())
   applicationDeadline DateTime
-  jobDescription     String
-  requiredSkills     String
-  experience         Float
-  budget             Float[]
-  department         String?
-  hiringManager      String
-  candidatesHired    Int       @default(0)
-  status             String
-  createdBy          String
-  createdOn          DateTime? @default(now())
-  lastUpdateBy       String?
-  lastUpdatedOn      DateTime?
-  deletedBy          String?
-  deletedOn          DateTime?
+  jobDescription      String
+  requiredSkills      String
+  experience          Float
+  budget              Float[]
+  department          String?
+  hiringManager       String
+  candidatesHired     Int       @default(0)
+  status              String
+  createdBy           String
+  createdOn           DateTime? @default(now())
+  lastUpdateBy        String?
+  lastUpdatedOn       DateTime?
+  deletedBy           String?
+  deletedOn           DateTime?
 
-  applications       JobApplication[]
+  applications JobApplication[]
 
   // null = tenant default template. internal/external visibility gate.
-  pipelineTemplateId String?   @db.ObjectId
-  visibility         String    @default("external") // internal | external | both
+  pipelineTemplateId String? @db.ObjectId
+  visibility         String  @default("external") // internal | external | both
 
   // All optional so openings created before these existed keep working.
   // `experience` stays the minimum years; experienceMax is the upper bound.
-  employmentType     String?   // full_time | part_time | contract | internship | temporary | other
-  workplaceType      String?   // onsite | hybrid | remote
+  employmentType     String? // full_time | part_time | contract | internship | temporary | other
+  workplaceType      String? // onsite | hybrid | remote
   // [{ country, state, city, office }] — required for onsite/hybrid only.
   locations          Json?
-  remoteScope        String?   // anywhere | country | regions (remote only)
+  remoteScope        String? // anywhere | country | regions (remote only)
   remoteRegions      String[]
   experienceMax      Float?
   preferredSkills    String?
@@ -533,8 +532,8 @@ model Candidate {
   id                   String    @id @default(auto()) @map("_id") @db.ObjectId
   tenantId             String?   @db.ObjectId
   name                 String
-  email                String    // normalised: trimmed, lower-case
-  mobile               String?   // normalised: +<country code><number>
+  email                String // normalised: trimmed, lower-case
+  mobile               String? // normalised: +<country code><number>
   emailVerifiedAt      DateTime?
   currentLocation      String?
   linkedinUrl          String?
@@ -546,7 +545,7 @@ model Candidate {
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
-  applications         JobApplication[]
+  applications JobApplication[]
 
   @@index([email])
   @@index([mobile])
@@ -562,7 +561,7 @@ model ApplicationDraft {
   id                    String    @id @default(auto()) @map("_id") @db.ObjectId
   tenantId              String?   @db.ObjectId
   jobOpeningId          String    @db.ObjectId
-  email                 String    // normalised; recovery looks drafts up by this
+  email                 String // normalised; recovery looks drafts up by this
   data                  Json
   // Bumped on every save; a save carrying an older revision is refused so
   // two devices can't silently overwrite each other.
@@ -586,32 +585,32 @@ model ApplicationDraft {
 }
 
 model JobApplication {
-  id           String   @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId     String?  @db.ObjectId
-  name         String?
-  mobile       String?
-  email        String?
-  aadharNo     String?
-  jobTitleId   String?  @db.ObjectId
-  resume       String?
+  id                    String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId              String?   @db.ObjectId
+  name                  String?
+  mobile                String?
+  email                 String?
+  aadharNo              String?
+  jobTitleId            String?   @db.ObjectId
+  resume                String?
   // Legacy unstructured pipeline storage — left untouched for existing rows.
   // New code writes ApplicationStageEvent instead (see below).
-  interviews   Json?
-  reason       String?
-  status       String   @default("Applied")
-  resumeScore  Float?
-  aiNotes      String?
+  interviews            Json?
+  reason                String?
+  status                String    @default("Applied")
+  resumeScore           Float?
+  aiNotes               String?
   // Set when status transitions to Rejected/Hired etc. via updateApplicationStatus.
-  remarks         String?
-  hireSalary      Float?
-  hireJoiningDate DateTime?
-  hireReferredBy  String?
+  remarks               String?
+  hireSalary            Float?
+  hireJoiningDate       DateTime?
+  hireReferredBy        String?
   // Full component breakdown captured at hire time (same shape as
   // SalaryStructure.componentBreakdown) — hireSalary stays as the derived
   // monthly gross (sum of earning components) for display/back-compat.
   // Null for candidates hired before this field existed; consumers must
   // fall back to the old deriveOfferCompensationBreakup(hireSalary) path.
-  hireSalaryComponents Json?
+  hireSalaryComponents  Json?
   // The company email HR/IT is provisioning for this hire, recorded before
   // the candidate's first login — lets join-request approval match by exact
   // email instead of guessing by name similarity. See updateAssignedOfficialEmail
@@ -620,32 +619,32 @@ model JobApplication {
 
   // Set when an existing employee applies internally, rather than being
   // re-entered as an external candidate.
-  userId             String?  @db.ObjectId
+  userId             String? @db.ObjectId
   // Snapshot of the template used at apply-time, in case it's edited later.
-  pipelineTemplateId String?  @db.ObjectId
-  currentStageOrder  Int      @default(0)
-  referredByUserId   String?  @db.ObjectId
+  pipelineTemplateId String? @db.ObjectId
+  currentStageOrder  Int     @default(0)
+  referredByUserId   String? @db.ObjectId
 
   // Null on applications from before candidates existed.
-  candidateId        String?  @db.ObjectId
+  candidateId                    String?   @db.ObjectId
   // Set when an earlier candidate shares this applicant's email or mobile
   // but the match couldn't be confirmed — for HR to review, not a merge.
-  possibleDuplicateOfCandidateId String? @db.ObjectId
+  possibleDuplicateOfCandidateId String?   @db.ObjectId
   // Answers to the opening's configurable form fields (experience, notice
   // period, CTC, links…) — see applicationForm on JobOpening.
-  profile            Json?
+  profile                        Json?
   // [{ questionId, label, type, value }] — label/type are snapshotted so
   // answers stay readable after the opening's questions are edited.
-  screeningAnswers   Json?
-  coverLetter        String?
-  submittedAt        DateTime?
-  consentAt          DateTime?
-  privacyNoticeVersion String?
+  screeningAnswers               Json?
+  coverLetter                    String?
+  submittedAt                    DateTime?
+  consentAt                      DateTime?
+  privacyNoticeVersion           String?
 
-  jobOpening   JobOpening? @relation(fields: [jobTitleId], references: [id], onDelete: SetNull)
-  candidate    Candidate?  @relation(fields: [candidateId], references: [id], onDelete: SetNull)
-  stageEvents  ApplicationStageEvent[]
-  offers       Offer[]
+  jobOpening  JobOpening?             @relation(fields: [jobTitleId], references: [id], onDelete: SetNull)
+  candidate   Candidate?              @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  stageEvents ApplicationStageEvent[]
+  offers      Offer[]
 
   @@index([jobTitleId])
   @@index([status])
@@ -658,7 +657,7 @@ model JobApplication {
 model InterviewPipelineTemplate {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   tenantId  String   @db.ObjectId
-  name      String   // "Engineering - Standard", "Sales Pipeline"
+  name      String // "Engineering - Standard", "Sales Pipeline"
   isDefault Boolean  @default(false)
   isActive  Boolean  @default(true)
   // [{ order, name, interviewerRole, outcomeOptions: ["pass","fail","hold"],
@@ -680,18 +679,18 @@ model ApplicationStageEvent {
   applicationId String    @db.ObjectId
   stageName     String
   stageOrder    Int
-  outcome       String?   // pass | fail | hold | pending
+  outcome       String? // pass | fail | hold | pending
   interviewerId String?   @db.ObjectId
-  scorecards    Json?     // panel: [{ interviewerId, score, notes }]
+  scorecards    Json? // panel: [{ interviewerId, score, notes }]
   bgvVendor     String?
-  bgvResult     String?   // clear | flagged | pending
+  bgvResult     String? // clear | flagged | pending
   scheduledAt   DateTime?
   completedAt   DateTime?
   notes         String?
   createdBy     String    @db.ObjectId
   createdAt     DateTime  @default(now())
 
-  application   JobApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  application JobApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
   @@index([applicationId, stageOrder])
   @@index([tenantId, applicationId])
@@ -717,7 +716,7 @@ model Offer {
   createdBy     String    @db.ObjectId
   createdAt     DateTime  @default(now())
 
-  application   JobApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  application JobApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
   @@index([applicationId, version])
   @@index([tenantId, status])
@@ -727,45 +726,45 @@ model Offer {
 // ─── Resignation ─────────────────────────────────────────────────────────────
 
 model Resignation {
-  id                          String    @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId                    String?   @db.ObjectId
-  userId                      String?   @db.ObjectId
-  resignationDate             DateTime?
-  lastWorkingDay              DateTime?
-  reason                      String?
-  comments                    String?
-  rejectionReason             String?
-  overallJobSatisfaction      Float     @default(0)
-  qualityOfCommunication      String?
-  supportFromManager          String?
-  appreciationForWork         String?
-  collaborationWithinTheTeam  String?
-  overallCompanyCulture       String?
-  suggestions                 String?
-  assetsReturned              Boolean?
-  fnfDone                     Boolean?
-  status                      String    @default("Submitted")
-  submittedOn                 DateTime?
-  approvedOn                  DateTime?
-  rejectedOn                  DateTime?
-  withdrawnOn                 DateTime?
-  feedbackSubmittedOn         DateTime?
-  lastUpdatedOn               DateTime?
+  id                         String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId                   String?   @db.ObjectId
+  userId                     String?   @db.ObjectId
+  resignationDate            DateTime?
+  lastWorkingDay             DateTime?
+  reason                     String?
+  comments                   String?
+  rejectionReason            String?
+  overallJobSatisfaction     Float     @default(0)
+  qualityOfCommunication     String?
+  supportFromManager         String?
+  appreciationForWork        String?
+  collaborationWithinTheTeam String?
+  overallCompanyCulture      String?
+  suggestions                String?
+  assetsReturned             Boolean?
+  fnfDone                    Boolean?
+  status                     String    @default("Submitted")
+  submittedOn                DateTime?
+  approvedOn                 DateTime?
+  rejectedOn                 DateTime?
+  withdrawnOn                DateTime?
+  feedbackSubmittedOn        DateTime?
+  lastUpdatedOn              DateTime?
 
   // voluntary | termination | absconding | mutual — branches the workflow
   // (absconding skips notice-period logic entirely; termination may skip the
   // employee-initiated steps).
-  exitType             String    @default("voluntary")
+  exitType           String    @default("voluntary")
   // Resolved from NoticePeriodPolicy at submission time. Kept alongside the
   // tenant-wide TenantSettings.noticePeriodDays flat fallback for tenants that
   // never configure tenure-based bands.
-  noticePeriodDays     Int?
-  noticePeriodWaived   Boolean   @default(false)
-  buyoutAmount         Float?
+  noticePeriodDays   Int?
+  noticePeriodWaived Boolean   @default(false)
+  buyoutAmount       Float?
   // Garden leave — relieved from active duty immediately, distinct from
   // lastWorkingDay (which payroll still runs through).
-  relievedFromDutyOn   DateTime?
-  rehireEligible       Boolean?
+  relievedFromDutyOn DateTime?
+  rehireEligible     Boolean?
 
   @@index([tenantId, userId])
   @@index([tenantId, status])
@@ -779,8 +778,8 @@ model NoticePeriodPolicy {
   id                String   @id @default(auto()) @map("_id") @db.ObjectId
   tenantId          String   @db.ObjectId
   minTenureMonths   Int      @default(0)
-  maxTenureMonths   Int?     // null = no upper bound
-  designation       String?  // null = applies to all
+  maxTenureMonths   Int? // null = no upper bound
+  designation       String? // null = applies to all
   department        String?
   noticePeriodDays  Int
   // Applies while the employee is still within TenantSettings.probationPeriodDays,
@@ -799,14 +798,14 @@ model NoticePeriodPolicy {
 // earlier, then manager asks them to stay two more weeks) — lastWorkingDay
 // itself only ever holds the current value.
 model ResignationNoticeEvent {
-  id                     String   @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId               String   @db.ObjectId
-  resignationId          String   @db.ObjectId
+  id                     String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId               String    @db.ObjectId
+  resignationId          String    @db.ObjectId
   previousLastWorkingDay DateTime?
   newLastWorkingDay      DateTime
   reason                 String?
-  changedBy              String   @db.ObjectId
-  createdAt              DateTime @default(now())
+  changedBy              String    @db.ObjectId
+  createdAt              DateTime  @default(now())
 
   @@index([resignationId])
   @@map("resignation_notice_events")
@@ -819,7 +818,7 @@ model ExitInterviewTemplate {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   tenantId  String   @db.ObjectId
   isActive  Boolean  @default(true)
-  questions Json     // [{ id, label, type: "rating"|"text"|"boolean", required }]
+  questions Json // [{ id, label, type: "rating"|"text"|"boolean", required }]
   createdBy String   @db.ObjectId
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -830,9 +829,9 @@ model ExitInterviewTemplate {
 model ExitInterviewResponse {
   id            String   @id @default(auto()) @map("_id") @db.ObjectId
   tenantId      String   @db.ObjectId
-  resignationId String   @db.ObjectId @unique
+  resignationId String   @unique @db.ObjectId
   templateId    String   @db.ObjectId
-  answers       Json     // [{ questionId, value }]
+  answers       Json // [{ questionId, value }]
   submittedOn   DateTime @default(now())
 
   @@map("exit_interview_responses")
@@ -844,8 +843,8 @@ model ExitInterviewResponse {
 model ExitChecklistItemDef {
   id         String   @id @default(auto()) @map("_id") @db.ObjectId
   tenantId   String   @db.ObjectId
-  label      String   // "Return laptop", "Clear IT access"
-  owningRole String   // "IT" | "Finance" | "HR" | "Admin"
+  label      String // "Return laptop", "Clear IT access"
+  owningRole String // "IT" | "Finance" | "HR" | "Admin"
   isRequired Boolean  @default(true)
   order      Int      @default(0)
   isActive   Boolean  @default(true)
@@ -873,9 +872,9 @@ model ExitChecklistItemStatus {
 model FnfSettlement {
   id                       String    @id @default(auto()) @map("_id") @db.ObjectId
   tenantId                 String    @db.ObjectId
-  resignationId            String    @db.ObjectId @unique
+  resignationId            String    @unique @db.ObjectId
   userId                   String    @db.ObjectId
-  lineItems                Json      // [{ label, type: "earning"|"deduction", amount }]
+  lineItems                Json // [{ label, type: "earning"|"deduction", amount }]
   leaveEncashmentAmount    Float     @default(0)
   noticeShortfallDeduction Float     @default(0)
   grossPayable             Float
@@ -895,31 +894,31 @@ model FnfSettlement {
 // ─── Salary ───────────────────────────────────────────────────────────────────
 
 model SalaryStructure {
-  id              String   @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId        String?  @db.ObjectId
-  userId          String   @db.ObjectId
-  grossSalary     Float
-  month           Int
-  year            Int
-  basicPay        Float?
-  hra             Float?
-  conveyance      Float?
-  incentive       Float?
-  pf              Float?
-  esi             Float?
-  pt              Float?
-  deductions      Float?
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId         String?   @db.ObjectId
+  userId           String    @db.ObjectId
+  grossSalary      Float
+  month            Int
+  year             Int
+  basicPay         Float?
+  hra              Float?
+  conveyance       Float?
+  incentive        Float?
+  pf               Float?
+  esi              Float?
+  pt               Float?
+  deductions       Float?
   // SalaryAdvance EMI deducted this month, if any — broken out of
   // `deductions` so payslips can itemize it instead of folding it into a
   // generic total (mirrors PayrollLineItem.advanceDeduction).
   advanceDeduction Float?
   // Income tax (TDS) withheld this month — see IncomeTaxSlab/TaxDeclaration
   // and calcMonthlyTds() in apps/api-gateway/src/utils/tdsCalc.ts.
-  tds             Float?
-  grossEarnings   Float?
-  netPayable      Float?
-  createdAt       DateTime? @default(now())
-  updatedAt       DateTime? @updatedAt
+  tds              Float?
+  grossEarnings    Float?
+  netPayable       Float?
+  createdAt        DateTime? @default(now())
+  updatedAt        DateTime? @updatedAt
 
   // [{code, name, type: "earning"|"deduction", amount}] — when set, supersedes
   // the fixed basicPay/hra/... columns above for tenants that have configured
@@ -927,7 +926,7 @@ model SalaryStructure {
   // fallback when this is null.
   componentBreakdown Json?
 
-  user            User?    @relation(fields: [userId], references: [id])
+  user User? @relation(fields: [userId], references: [id])
 
   // Was a plain @@index — payslip de-duplication (see updatePayrollRunStatus's
   // disburse branch in payroll.ts) relied on a manual findFirst-then-create/
@@ -946,8 +945,8 @@ model SalaryComponentDefinition {
   id           String   @id @default(auto()) @map("_id") @db.ObjectId
   tenantId     String   @db.ObjectId
   name         String
-  code         String   // "BASIC","HRA","SPECIAL_ALLOWANCE","SHIFT_ALLOWANCE"
-  type         String   // earning | deduction
+  code         String // "BASIC","HRA","SPECIAL_ALLOWANCE","SHIFT_ALLOWANCE"
+  type         String // earning | deduction
   isTaxable    Boolean  @default(true)
   calcType     String   @default("fixed") // fixed | percent_of_basic | formula
   percentOf    String?
@@ -988,10 +987,10 @@ model ProfessionalTaxSlab {
 // like ProfessionalTaxSlab does, until a tenant configures its own rows —
 // slabs change almost every Union Budget so this can't be hardcoded forever.
 model IncomeTaxSlab {
-  id            String   @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId      String   @db.ObjectId
-  financialYear String   // e.g. "2025-26"
-  regime        String   // "old" | "new"
+  id            String @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId      String @db.ObjectId
+  financialYear String // e.g. "2025-26"
+  regime        String // "old" | "new"
   minIncome     Float
   maxIncome     Float?
   ratePercent   Float
@@ -1008,36 +1007,36 @@ model IncomeTaxSlab {
 // declare-then-prove stage: employees provisionally declare exemptions early
 // in the year, then submit proofs later for HR to verify.
 model TaxDeclaration {
-  id            String    @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId      String    @db.ObjectId
-  userId        String    @db.ObjectId
-  financialYear String    // e.g. "2025-26"
+  id            String @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId      String @db.ObjectId
+  userId        String @db.ObjectId
+  financialYear String // e.g. "2025-26"
 
   // HRA exemption inputs — the exemption itself is computed (see
   // calcHraExemption in tdsCalc.ts), not directly declared.
-  monthlyRent   Float?
-  isMetroCity   Boolean?
+  monthlyRent Float?
+  isMetroCity Boolean?
 
   // [{code, label, declaredAmount, proofAmount}] — codes: SEC80C,
   // SEC80D_SELF, SEC80D_PARENTS, HOME_LOAN_INTEREST, NPS_80CCD1B, OTHER.
   // A flat Json array (mirrors SalaryStructure.componentBreakdown) instead
   // of one column per section, so a new declarable section is a data
   // change, not a migration.
-  lineItems     Json?
+  lineItems Json?
 
   // Draft | Submitted | RevisionRequested | Declared | ProofsSubmitted |
   // ProofRevisionRequested | Verified
-  status        String    @default("Draft")
-  revisionNotes Json?     // {field: issue}, same shape as User.kyc_revision_notes
+  status        String @default("Draft")
+  revisionNotes Json? // {field: issue}, same shape as User.kyc_revision_notes
 
-  submittedAt   DateTime?
-  declaredAt    DateTime?
-  provenAt      DateTime?
-  verifiedAt    DateTime?
-  verifiedBy    String?   @db.ObjectId
+  submittedAt DateTime?
+  declaredAt  DateTime?
+  provenAt    DateTime?
+  verifiedAt  DateTime?
+  verifiedBy  String?   @db.ObjectId
 
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([tenantId, userId, financialYear])
   @@index([tenantId, status])
@@ -1064,14 +1063,14 @@ model PayCycle {
 // ─── Notifications ────────────────────────────────────────────────────────────
 
 model Notification {
-  id         String                  @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId   String?                 @db.ObjectId
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId   String?   @db.ObjectId
   title      String?
   message    String?
   timeStamp  DateTime? @default(now())
-  eventType  String                  @default("general")
-  activityId String?                 @db.ObjectId
-  priority   String                  @default("medium")
+  eventType  String    @default("general")
+  activityId String?   @db.ObjectId
+  priority   String    @default("medium")
   // BullMQ job id — set only for notifications created by
   // notificationWorker.ts, used to make a stalled/retried job a no-op
   // instead of creating (and re-broadcasting/re-pushing) a duplicate.
@@ -1089,14 +1088,14 @@ model Notification {
 }
 
 model NotificationRecipient {
-  id             String       @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId       String?      @db.ObjectId
-  notificationId String       @db.ObjectId
-  userId         String       @db.ObjectId
-  isCleared      Boolean      @default(false)
+  id             String  @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId       String? @db.ObjectId
+  notificationId String  @db.ObjectId
+  userId         String  @db.ObjectId
+  isCleared      Boolean @default(false)
 
-  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
-  user           User         @relation(fields: [userId], references: [id])
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id])
 
   @@index([tenantId, userId, isCleared])
   // Each tenant has its own database and tenant-routed queries carry no
@@ -1151,7 +1150,7 @@ model ChatRoom {
   createdAt     DateTime? @default(now())
   updatedAt     DateTime? @updatedAt
 
-  messages      Message[]
+  messages Message[]
 
   @@index([tenantId, participants])
   @@map("chatrooms")
@@ -1177,7 +1176,7 @@ model Message {
   createdAt    DateTime? @default(now())
   updatedAt    DateTime? @updatedAt
 
-  chatRoom     ChatRoom  @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+  chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
 
   @@index([chatRoomId, createdAt])
   @@index([chatRoomId, isDeleted])
@@ -1188,9 +1187,9 @@ model Message {
 // ─── Audit Log ────────────────────────────────────────────────────────────────
 
 model AuditLog {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId    String?  @db.ObjectId
-  userId      String?  @db.ObjectId
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId    String?   @db.ObjectId
+  userId      String?   @db.ObjectId
   // Denormalized at write time — survives the acting user later being
   // deleted/renamed, and avoids a join every time the log is displayed.
   username    String?
@@ -1198,7 +1197,7 @@ model AuditLog {
   entityType  String
   oldValue    Json?
   newValue    Json?
-  description String   @default("")
+  description String    @default("")
   ipAddress   String?
   userAgent   String?
   timestamp   DateTime? @default(now())
@@ -1217,8 +1216,8 @@ model AuditLog {
 // ─── Holidays ─────────────────────────────────────────────────────────────────
 
 model Holiday {
-  id       String   @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId String?  @db.ObjectId
+  id       String  @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId String? @db.ObjectId
   year     Int
   month    Int
   holidays Json?
@@ -1258,13 +1257,13 @@ model Policy {
 model ApprovalChain {
   id             String   @id @default(auto()) @map("_id") @db.ObjectId
   tenantId       String   @db.ObjectId
-  module         String   // "leave" | "resignation" | "wfh" | "salary_advance" | "overtime"
+  module         String // "leave" | "resignation" | "wfh" | "salary_advance" | "overtime"
   name           String
   // Optional gate, e.g. { conditionField: "days", conditionOp: "gte", conditionValue: 5 }
   // for "leave > 5 days needs 2 approvers". Null condition = default/fallback chain
   // for the module.
   conditionField String?
-  conditionOp    String?  // "gte" | "lte" | "eq" | "in"
+  conditionOp    String? // "gte" | "lte" | "eq" | "in"
   conditionValue Json?
   priority       Int      @default(0) // higher wins when multiple chains match
   isActive       Boolean  @default(true)
@@ -1282,7 +1281,7 @@ model ApprovalChainStep {
   chainId        String  @db.ObjectId
   order          Int
   // How the actual approver is resolved when a request is instantiated:
-  approverType   String  // "reporting_manager" | "specific_user" | "role" | "team_leader"
+  approverType   String // "reporting_manager" | "specific_user" | "role" | "team_leader"
   approverUserId String? @db.ObjectId // when approverType = specific_user
   approverRole   String? // when approverType = role, e.g. "hr" | "admin" | "owner"
 
@@ -1340,7 +1339,7 @@ model ApprovalDelegate {
   delegateId  String   @db.ObjectId // proxy
   startDate   DateTime
   endDate     DateTime
-  module      String?  // null = applies to all modules
+  module      String? // null = applies to all modules
   note        String?
   createdAt   DateTime @default(now())
 
@@ -1384,11 +1383,11 @@ model Designation {
 // ─── Teams ────────────────────────────────────────────────────────────────────
 
 model Team {
-  id           String   @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId     String?  @db.ObjectId
-  teamName     String
-  teamLeaderId String   @db.ObjectId
-  members      String[] @db.ObjectId
+  id                      String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId                String?  @db.ObjectId
+  teamName                String
+  teamLeaderId            String   @db.ObjectId
+  members                 String[] @db.ObjectId
   // null = tenant default; same shape as TenantSettings.workWeekPattern.
   workWeekPatternOverride Json?
 
@@ -1405,26 +1404,26 @@ model Team {
 // Future rows (effectiveFrom > now) are *pending* changes.
 
 model TenantSettings {
-  id                     String   @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId               String   @db.ObjectId
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId      String   @db.ObjectId
   // When this version becomes active. Defaults to now → immediate effect.
-  effectiveFrom          DateTime @default(now())
+  effectiveFrom DateTime @default(now())
 
   // ── Work week ──────────────────────────────────────────────────────────────
   // { type: "mon_fri" | "mon_sat" | "custom", workingDays: number[] } (0=Sun..6=Sat).
   // Asked once at signup (OrgSetupPage) because getting it wrong silently
   // corrupts attendance/leave day-count math — everything else in this model
   // is safe to auto-default and edit later.
-  workWeekPattern        Json?
+  workWeekPattern Json?
 
   // ── Leave ──────────────────────────────────────────────────────────────────
-  paidLeavesPerYear      Int      @default(12)
-  sickLeavesPerYear      Int      @default(12)
-  casualLeavesPerYear    Int      @default(6)
+  paidLeavesPerYear   Int     @default(12)
+  sickLeavesPerYear   Int     @default(12)
+  casualLeavesPerYear Int     @default(6)
   // Require a medical certificate when sickLeave=true
-  medicalCertRequired    Boolean  @default(false)
+  medicalCertRequired Boolean @default(false)
   // Extra leave types: [{ name, key, daysPerYear, requiresProof }]
-  customLeaveTypes       Json?
+  customLeaveTypes    Json?
   // Richer per-leave-type policy, superseding the 3 scalar quota fields above
   // and customLeaveTypes when set: [{ key, name, daysPerYear, isStatutory,
   // requiresProof, accrualMethod, prorateByJoinDate, carryForward: {enabled,
@@ -1432,18 +1431,18 @@ model TenantSettings {
   // isCompOff, compOffExpiryDays, onExhaustion, blackoutPeriods, teamConcurrentCapPercent }]
   // Left null, every tenant keeps today's behavior — simple quotas, no
   // carry-forward/encashment/blackout rules.
-  leavePolicies          Json?
+  leavePolicies       Json?
 
   // ── Attendance ─────────────────────────────────────────────────────────────
   // Work starts at workStartHour:workStartMinute (24-hour clock)
-  workStartHour          Int      @default(9)
-  workStartMinute        Int      @default(0)
+  workStartHour                    Int     @default(9)
+  workStartMinute                  Int     @default(0)
   // Minutes after work-start before check-in is flagged as "Late"
-  lateGracePeriodMinutes Int      @default(30)
+  lateGracePeriodMinutes           Int     @default(30)
   // Minimum working hours to count as a full day
-  fullDayMinHours        Float    @default(8)
+  fullDayMinHours                  Float   @default(8)
   // Minimum working hours to count as a half day (anything below → Half Day)
-  halfDayMinHours        Float    @default(4)
+  halfDayMinHours                  Float   @default(4)
   // How many days back an employee/admin may backdate a regularization request.
   regularizationBackdateWindowDays Int     @default(3)
   // When true, hours beyond the shift end only count as overtime once an
@@ -1452,33 +1451,33 @@ model TenantSettings {
 
   // ── Geofencing ─────────────────────────────────────────────────────────────
   // When true, CHECK_IN is blocked if employee is outside the allowed radius.
-  geofencingEnabled      Boolean  @default(false)
+  geofencingEnabled    Boolean @default(false)
   // Office GPS coordinates (set by admin via map picker)
-  officeLatitude         Float?
-  officeLongitude        Float?
+  officeLatitude       Float?
+  officeLongitude      Float?
   // Human-readable label shown to employees
-  officeName             String?
+  officeName           String?
   // Allowed radius in metres (applies to both office and WFH home location)
-  geofenceRadiusMeters   Int      @default(200)
+  geofenceRadiusMeters Int     @default(200)
 
   // ── Modules ────────────────────────────────────────────────────────────────
   // Tenant-wide switch for the WFH module (distinct from User.wfh, which is
   // per-employee eligibility). Defaults true so existing tenants keep today's
   // behavior.
-  wfhEnabled             Boolean  @default(true)
+  wfhEnabled Boolean @default(true)
 
   // ── HR ─────────────────────────────────────────────────────────────────────
-  probationPeriodDays    Int      @default(90)
-  noticePeriodDays       Int      @default(30)
+  probationPeriodDays Int @default(90)
+  noticePeriodDays    Int @default(30)
   // How many interview rounds this tenant normally runs per candidate.
   // scheduleInterview rejects going past it.
-  maxInterviewRounds     Int      @default(5)
+  maxInterviewRounds  Int @default(5)
 
   // ── Audit ──────────────────────────────────────────────────────────────────
-  createdBy              String?  @db.ObjectId
-  note                   String?  // optional reason / changelog note
+  createdBy String? @db.ObjectId
+  note      String? // optional reason / changelog note
 
-  createdAt              DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@unique([tenantId, effectiveFrom])
   @@map("tenant_settings")
@@ -1489,7 +1488,7 @@ model TenantSettings {
 // logging in on another device doesn't see the whole checklist again.
 model OnboardingChecklistState {
   id         String   @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId   String   @db.ObjectId @unique
+  tenantId   String   @unique @db.ObjectId
   itemStatus Json     @default("{}") // { stepKey: "completed" | "skipped" }
   updatedAt  DateTime @updatedAt
 
@@ -1517,7 +1516,7 @@ model LoginEvent {
   riskReasons       String[]
   isAnomaly         Boolean  @default(false)
 
-  user              User     @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 
   @@index([tenantId, userId, timestamp])
   @@map("login_events")
@@ -1530,7 +1529,7 @@ model LoginEvent {
 model PayrollRun {
   id              String    @id @default(auto()) @map("_id") @db.ObjectId
   tenantId        String?   @db.ObjectId
-  month           Int       // 1–12
+  month           Int // 1–12
   year            Int
   // draft → processing → approved → disbursing → disbursed | disbursement_failed | cancelled
   // "disbursing"/"disbursement_failed" exist because disbursement now runs
@@ -1557,7 +1556,7 @@ model PayrollRun {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  lineItems       PayrollLineItem[]
+  lineItems PayrollLineItem[]
 
   @@unique([tenantId, month, year])
   @@index([tenantId, status])
@@ -1566,30 +1565,30 @@ model PayrollRun {
 
 // One row per employee per PayrollRun — immutable snapshot of earnings/deductions.
 model PayrollLineItem {
-  id               String  @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId         String? @db.ObjectId
-  payrollRunId     String  @db.ObjectId
-  userId           String  @db.ObjectId
-  grossSalary      Float
-  basicPay         Float   @default(0)
-  hra              Float   @default(0)
-  conveyance       Float   @default(0)
-  incentive        Float   @default(0)
-  pf               Float   @default(0)
-  esi              Float   @default(0)
-  pt               Float   @default(0)
-  advanceDeduction Float   @default(0) // SalaryAdvance EMI deducted this month
-  tds              Float   @default(0) // Income tax (TDS) — see IncomeTaxSlab/TaxDeclaration
-  otherDeductions  Float   @default(0)
-  totalDeductions  Float   @default(0)
-  netPayable       Float
-  payslipId        String? @db.ObjectId // reference to SalaryStructure once generated
+  id                 String  @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId           String? @db.ObjectId
+  payrollRunId       String  @db.ObjectId
+  userId             String  @db.ObjectId
+  grossSalary        Float
+  basicPay           Float   @default(0)
+  hra                Float   @default(0)
+  conveyance         Float   @default(0)
+  incentive          Float   @default(0)
+  pf                 Float   @default(0)
+  esi                Float   @default(0)
+  pt                 Float   @default(0)
+  advanceDeduction   Float   @default(0) // SalaryAdvance EMI deducted this month
+  tds                Float   @default(0) // Income tax (TDS) — see IncomeTaxSlab/TaxDeclaration
+  otherDeductions    Float   @default(0)
+  totalDeductions    Float   @default(0)
+  netPayable         Float
+  payslipId          String? @db.ObjectId // reference to SalaryStructure once generated
   // Same shape/fallback rule as SalaryStructure.componentBreakdown.
   componentBreakdown Json?
 
   // RazorpayX payout tracking — populated on disburse.
-  payoutId            String?   // RazorpayX payout_id (e.g. "pout_xxx")
-  payoutStatus        String?   // pending | processing | processed | skipped | failed | permanently_failed
+  payoutId            String? // RazorpayX payout_id (e.g. "pout_xxx")
+  payoutStatus        String? // pending | processing | processed | skipped | failed | permanently_failed
   payoutFailureReason String?
   payoutInitiatedAt   DateTime?
   // Incremented on every failed payout attempt (see payrollDisbursement.ts).
@@ -1607,7 +1606,7 @@ model PayrollLineItem {
   // safe — see SalaryStructure's @@unique — but the advance ledger isn't).
   postProcessed       Boolean   @default(false)
 
-  payrollRun       PayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Restrict)
+  payrollRun PayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Restrict)
 
   @@index([payrollRunId])
   @@index([tenantId, userId])
@@ -1625,8 +1624,8 @@ model SalaryAdvance {
   status          String    @default("Pending")
   approvedBy      String?   @db.ObjectId
   approvedAt      DateTime?
-  emiAmount       Float?    // per-month deduction
-  emiMonths       Int?      // total repayment months
+  emiAmount       Float? // per-month deduction
+  emiMonths       Int? // total repayment months
   paidMonths      Int       @default(0)
   remainingAmount Float?
   createdAt       DateTime  @default(now())
@@ -1640,52 +1639,52 @@ model SalaryAdvance {
 // ─── Performance Review ───────────────────────────────────────────────────────
 
 model PerformanceReviewCycle {
-  id          String    @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId    String    @db.ObjectId
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId    String   @db.ObjectId
   name        String // "H1 2026 Annual Review"
   periodStart DateTime
   periodEnd   DateTime
-  status      String    @default("draft") // draft | active | closed
-  ratingScale Int       @default(5) // e.g. 1-5
-  createdBy   String    @db.ObjectId
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  status      String   @default("draft") // draft | active | closed
+  ratingScale Int      @default(5) // e.g. 1-5
+  createdBy   String   @db.ObjectId
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  reviews     PerformanceReview[]
+  reviews PerformanceReview[]
 
   @@index([tenantId, status])
   @@map("performance_review_cycles")
 }
 
 model PerformanceReview {
-  id      String @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId String @db.ObjectId
-  cycleId String @db.ObjectId
-  userId  String @db.ObjectId // employee being reviewed
+  id                      String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId                String    @db.ObjectId
+  cycleId                 String    @db.ObjectId
+  userId                  String    @db.ObjectId // employee being reviewed
   // Reporting manager, resolved at creation from Team.teamLeaderId — left
   // unset when the employee isn't on any Team yet; the actual approval
   // routing at manager-review time is resolved independently by
   // @hrms/approval-engine (falls back to owner/admin), so this is
   // informational/denormalized rather than load-bearing.
-  reviewerId String? @db.ObjectId
+  reviewerId              String?   @db.ObjectId
   // draft -> self_assessment_submitted -> manager_review_submitted -> approved | rejected
-  status  String @default("draft")
-  selfComments String?
-  selfRating   Float?
-  managerComments String?
-  managerRating   Float?
-  overallRating   Float?
+  status                  String    @default("draft")
+  selfComments            String?
+  selfRating              Float?
+  managerComments         String?
+  managerRating           Float?
+  overallRating           Float?
   // HR's recommended comp change, proposed alongside the manager review
   recommendedIncrementPct Float?
   effectiveFrom           DateTime?
   // Populated once the final-approval side-effect (api-gateway) creates the
   // new SalaryStructure — cross-service reference, no Prisma @relation.
-  salaryStructureId String?   @db.ObjectId
-  submittedAt       DateTime?
-  managerSubmittedAt DateTime?
-  finalizedAt       DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  salaryStructureId       String?   @db.ObjectId
+  submittedAt             DateTime?
+  managerSubmittedAt      DateTime?
+  finalizedAt             DateTime?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
   cycle PerformanceReviewCycle @relation(fields: [cycleId], references: [id], onDelete: Restrict)
   user  User?                  @relation(fields: [userId], references: [id])
@@ -1721,7 +1720,7 @@ model AssetCategory {
 model Asset {
   id            String    @id @default(auto()) @map("_id") @db.ObjectId
   tenantId      String?   @db.ObjectId
-  assetCode     String    // unique per tenant (e.g. "LAP-001")
+  assetCode     String // unique per tenant (e.g. "LAP-001")
   name          String
   // Free text, not a fixed enum — seeded with a starter set (Laptop, Desktop,
   // Phone, Tablet, Monitor, Furniture, Vehicle, Other) but HR can enter a new
@@ -1738,13 +1737,13 @@ model Asset {
   // good | fair | damaged
   condition     String    @default("good")
   notes         String?
-  qrCodeUrl     String?   // S3 URL for generated QR image
+  qrCodeUrl     String? // S3 URL for generated QR image
   createdBy     String    @db.ObjectId
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  assignments   AssetAssignment[]
-  issues        AssetIssue[]
+  assignments AssetAssignment[]
+  issues      AssetIssue[]
 
   @@unique([tenantId, assetCode])
   @@index([tenantId, status])
@@ -1754,23 +1753,23 @@ model Asset {
 
 // Full audit trail: every assign and return is a new row.
 model AssetAssignment {
-  id             String    @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId       String?   @db.ObjectId
-  assetId        String    @db.ObjectId
-  userId         String    @db.ObjectId  // who holds the asset
-  assignedBy     String    @db.ObjectId  // HR/admin who assigned
-  assignedOn     DateTime  @default(now())
-  expectedReturn DateTime?
-  returnedOn     DateTime?
-  returnedTo     String?   @db.ObjectId  // who received it back
-  conditionOut      String    @default("good")
-  conditionIn       String?   // recorded on return
-  notes             String?
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId         String?   @db.ObjectId
+  assetId          String    @db.ObjectId
+  userId           String    @db.ObjectId // who holds the asset
+  assignedBy       String    @db.ObjectId // HR/admin who assigned
+  assignedOn       DateTime  @default(now())
+  expectedReturn   DateTime?
+  returnedOn       DateTime?
+  returnedTo       String?   @db.ObjectId // who received it back
+  conditionOut     String    @default("good")
+  conditionIn      String? // recorded on return
+  notes            String?
   // Employee signs off that they received the asset in the stated condition.
-  acknowledgedAt    DateTime?
-  acknowledgedNote  String?
+  acknowledgedAt   DateTime?
+  acknowledgedNote String?
 
-  asset          Asset     @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Restrict)
 
   @@index([assetId])
   @@index([tenantId, userId])
@@ -1782,8 +1781,8 @@ model AssetIssue {
   id            String    @id @default(auto()) @map("_id") @db.ObjectId
   tenantId      String?   @db.ObjectId
   assetId       String    @db.ObjectId
-  assignmentId  String?   @db.ObjectId   // the active assignment when the issue was raised
-  reportedBy    String    @db.ObjectId   // employee who reported
+  assignmentId  String?   @db.ObjectId // the active assignment when the issue was raised
+  reportedBy    String    @db.ObjectId // employee who reported
   // malfunction | damage | lost | stolen | return_request | other
   type          String
   // low | medium | high | critical
@@ -1792,15 +1791,15 @@ model AssetIssue {
   description   String
   // open | in_review | approved | resolved | rejected
   status        String    @default("open")
-  reviewedBy    String?   @db.ObjectId   // HR/admin who acted on it
+  reviewedBy    String?   @db.ObjectId // HR/admin who acted on it
   reviewedAt    DateTime?
-  reviewNotes   String?   // HR's notes at review/decision time
+  reviewNotes   String? // HR's notes at review/decision time
   resolvedAt    DateTime?
-  resolverNotes String?   // HR's notes at resolution time
+  resolverNotes String? // HR's notes at resolution time
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  asset         Asset     @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Restrict)
 
   @@index([tenantId, assetId])
   @@index([tenantId, reportedBy, status])
@@ -1814,7 +1813,7 @@ model WfhRequest {
   id              String    @id @default(auto()) @map("_id") @db.ObjectId
   tenantId        String?   @db.ObjectId
   userId          String    @db.ObjectId
-  date            DateTime  // UTC midnight of the first requested day
+  date            DateTime // UTC midnight of the first requested day
   // UTC midnight of the last requested day — always set, equals `date` for a
   // single-day request. Kept non-optional (rather than null-for-single-day)
   // to sidestep Prisma's Mongo connector treating an explicit null and a
@@ -1842,7 +1841,7 @@ model WfhRequest {
 model Ticket {
   id          String    @id @default(auto()) @map("_id") @db.ObjectId
   tenantId    String?   @db.ObjectId
-  ticketNo    String    // auto-generated sequential: TICK-00001
+  ticketNo    String // auto-generated sequential: TICK-00001
   title       String
   description String
   // IT | Payroll | Leave | Onboarding | HR | Other
@@ -1857,11 +1856,11 @@ model Ticket {
   resolvedAt  DateTime?
   slaDeadline DateTime? // computed at creation from priority SLA hours
   slaBreached Boolean   @default(false)
-  attachments String[]  // S3 URLs
+  attachments String[] // S3 URLs
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  comments    TicketComment[]
+  comments TicketComment[]
 
   @@index([tenantId, raisedBy])
   @@index([tenantId, assignedTo, status])
@@ -1871,15 +1870,15 @@ model Ticket {
 }
 
 model TicketComment {
-  id         String    @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId   String?   @db.ObjectId
-  ticketId   String    @db.ObjectId
-  userId     String    @db.ObjectId
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId   String?  @db.ObjectId
+  ticketId   String   @db.ObjectId
+  userId     String   @db.ObjectId
   comment    String
-  isInternal Boolean   @default(false) // internal note — hidden from the ticket raiser
-  createdAt  DateTime  @default(now())
+  isInternal Boolean  @default(false) // internal note — hidden from the ticket raiser
+  createdAt  DateTime @default(now())
 
-  ticket     Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@index([ticketId])
   @@map("ticket_comments")
@@ -1896,8 +1895,8 @@ model SavedReport {
   entity      String
   // { filters: [...], columns: [...], groupBy?, sort?, limit? }
   config      Json
-  schedule    String?   // cron expression for auto-delivery (null = on-demand only)
-  recipients  String[]  // email addresses for scheduled delivery
+  schedule    String? // cron expression for auto-delivery (null = on-demand only)
+  recipients  String[] // email addresses for scheduled delivery
   createdBy   String    @db.ObjectId
   lastRunAt   DateTime?
   createdAt   DateTime  @default(now())
@@ -1951,28 +1950,28 @@ model WalkthroughProgress {
 // offline) is ephemeral and lives in Redis, not here. `revision` increases
 // on every write, so a delayed expiry job can tell it has been overtaken.
 model PresenceStatus {
-  id           String    @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId     String    @db.ObjectId
-  userId       String    @db.ObjectId
+  id                   String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId             String    @db.ObjectId
+  userId               String    @db.ObjectId
   // available | busy | dnd | meeting | break | lunch | focusing | away
-  availability String    @default("available")
+  availability         String    @default("available")
   // manual (picked by the person) | default (restored automatically)
-  source       String    @default("manual")
-  message      String?
+  source               String    @default("manual")
+  message              String?
   // null = until changed
-  expiresAt    DateTime?
+  expiresAt            DateTime?
   // The status (and its message) restored when a timed status ends; only
   // ever one without an end time. null = back to Available.
   previousAvailability String?
   previousMessage      String?
   // IANA zone the person last set a status from (for "end of workday").
-  timeZone     String?
-  revision     Int       @default(0)
+  timeZone             String?
+  revision             Int       @default(0)
   // Set when the person's last connection closes — not on every heartbeat.
-  lastActiveAt DateTime?
-  changedAt    DateTime  @default(now())
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  lastActiveAt         DateTime?
+  changedAt            DateTime  @default(now())
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   @@unique([tenantId, userId])
   @@map("presence_statuses")
@@ -2213,7 +2212,7 @@ model WebhookInboxEvent {
   provider      String
   eventId       String
   eventType     String?
-  status        String    // processing | processed | failed | dead
+  status        String // processing | processed | failed | dead
   attempts      Int       @default(1)
   leaseUntil    DateTime
   // Sealed; kept only until the event has been processed.
@@ -2225,4 +2224,79 @@ model WebhookInboxEvent {
   @@unique([provider, eventId])
   @@index([status, receivedAt])
   @@map("webhook_inbox_events")
+}
+
+// Sales enquiries from the public website (Book a Demo, Contact Sales).
+// Master DB. Read and changed only in the Platform Console
+// (PraestoAdmin:view_leads / manage_leads); never sent to analytics.
+// Deleted by a TTL index on purgeAt, which every submission and staff
+// change pushes out to LEAD_RETENTION_MONTHS from then (ensureIndexes.ts).
+model Lead {
+  id              String     @id @default(auto()) @map("_id") @db.ObjectId
+  // demo | sales | custom (LEAD_KINDS in the gateway's config/leads.ts)
+  kind            String
+  name            String
+  // Trimmed and lower-cased.
+  email           String
+  // E.164, e.g. +919876543210. Optional.
+  phone           String?
+  companyName     String
+  // One of COMPANY_SIZES.
+  companySize     String
+  designation     String?
+  message         String?
+  // Demo requests: a preferred day (YYYY-MM-DD, IST) and part of the day.
+  preferredDate   String?
+  preferredTime   String?
+  // gmail.com and other webmail: a qualification hint, never a rejection.
+  freeEmailDomain Boolean    @default(false)
+  // First-touch attribution, sanitised on the server.
+  utmSource       String?
+  utmMedium       String?
+  utmCampaign     String?
+  utmTerm         String?
+  utmContent      String?
+  utmId           String?
+  // Path only, e.g. "/". Never a query string.
+  landingPage     String?
+  // Host only, e.g. "www.linkedin.com".
+  referrerHost    String?
+  // new | contacted | qualified | demo_scheduled | negotiation | converted | lost
+  status          String     @default("new")
+  // A Praesto team member with PraestoAdmin:manage_leads. Always written
+  // (null when unassigned): Prisma's Mongo connector doesn't match a missing
+  // field with `ownerId: null`.
+  ownerId         String?    @db.ObjectId
+  lastContactedAt DateTime?
+  nextFollowUpAt  DateTime?
+  // First time the lead reached each stage (funnel rates).
+  qualifiedAt     DateTime?
+  demoScheduledAt DateTime?
+  convertedAt     DateTime?
+  lostAt          DateTime?
+  // Repeat submissions from the same address merge into the open lead.
+  submissionCount Int        @default(1)
+  lastSubmittedAt DateTime   @default(now())
+  // Last time the team was notified about this lead (at most once a day).
+  lastNotifiedAt  DateTime?
+  // When the visitor accepted the privacy notice on the form.
+  consentAt       DateTime
+  notes           LeadNote[]
+  purgeAt         DateTime
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([status, createdAt])
+  @@index([email, status])
+  @@index([ownerId, status])
+  @@map("leads")
+}
+
+// An internal note on a lead (authorId null: written by the system, e.g. a
+// repeat submission).
+type LeadNote {
+  id        String
+  authorId  String?  @db.ObjectId
+  body      String
+  createdAt DateTime
 }
