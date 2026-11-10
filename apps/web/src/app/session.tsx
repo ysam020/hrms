@@ -39,6 +39,7 @@ import {
   ToastHost,
 } from "@next/ui";
 import { PUBLIC_PAGES, applyPageMeta, normalizePath } from "./seo";
+import { trackPageView } from "./analytics";
 import { takeReturnPath } from "./returnPath";
 
 // Session orchestration for Praesto Next. Everything security-relevant — the
@@ -268,8 +269,18 @@ export function SessionRoot() {
     }
   }, [user]);
 
+  // A Google sign-in return lands on "/" only to be forwarded into the app
+  // or to setup: a redirect, not a visit to the landing page.
+  const oauthLanding = useRef(
+    new URLSearchParams(initialSearch.current).has("oauth_success"),
+  );
   useEffect(() => {
     applyPageMeta(location.pathname);
+    // Runs after the boot effect has taken any token out of the URL.
+    if (oauthLanding.current && normalizePath(location.pathname) === "/")
+      return;
+    oauthLanding.current = false;
+    trackPageView(location.pathname);
   }, [location.pathname]);
 
   // The landing and policy pages don't depend on the session, so they show

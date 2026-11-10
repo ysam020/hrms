@@ -28,6 +28,7 @@ import { UserContext } from "@web/app/providers/UserContext";
 import hasSubscriptionAccess from "@web/shared/utils/permissions/hasSubscriptionAccess";
 import { Avatar, Icon, Menu, type IconName } from "@next/ui";
 import { arrivedPrerendered } from "@next/app/seo";
+import { trackEvent, trackPricingView } from "@next/app/analytics";
 import { BrandLockup } from "../auth/BrandMark";
 import {
   MacBookShowcase,
@@ -556,13 +557,28 @@ export default function Landing() {
                     <Link
                       to="/login"
                       className={`${s.cta} ${s.ctaPrimary} ${s.ctaRoll}`}
+                      onClick={() =>
+                        trackEvent("sign_up_click", {
+                          cta_id: "get_started",
+                          cta_location: "closing",
+                        })
+                      }
                     >
                       <Roll>Get Started</Roll>
                       <span className={s.chip} aria-hidden="true">
                         <Arrow />
                       </span>
                     </Link>
-                    <Link to="/login" className={`${s.cta} ${s.ctaGhost}`}>
+                    <Link
+                      to="/login"
+                      className={`${s.cta} ${s.ctaGhost}`}
+                      onClick={() =>
+                        trackEvent("cta_click", {
+                          cta_id: "sign_in",
+                          cta_location: "closing",
+                        })
+                      }
+                    >
                       <Roll>Sign In</Roll>
                     </Link>
                   </>
@@ -656,13 +672,29 @@ function Hero({ still, signedIn }: { still: boolean; signedIn: boolean }) {
           <Link
             to={signedIn ? "/dashboard" : "/login"}
             className={`${s.cta} ${s.ctaPrimary} ${s.ctaRoll}`}
+            onClick={() =>
+              !signedIn &&
+              trackEvent("sign_up_click", {
+                cta_id: "get_started",
+                cta_location: "hero",
+              })
+            }
           >
             <Roll>{signedIn ? "Open Dashboard" : "Get Started"}</Roll>
             <span className={s.chip} aria-hidden="true">
               <Arrow />
             </span>
           </Link>
-          <a href="#features" className={`${s.cta} ${s.ctaGhost}`}>
+          <a
+            href="#features"
+            className={`${s.cta} ${s.ctaGhost}`}
+            onClick={() =>
+              trackEvent("cta_click", {
+                cta_id: "explore_platform",
+                cta_location: "hero",
+              })
+            }
+          >
             <Roll>Explore the Platform</Roll>
             <Icon name="chevronDown" size={14} className={s.nudge} />
           </a>
@@ -831,12 +863,27 @@ function NavBar({
             <AccountMenu user={user} />
           ) : (
             <>
-              <Link to="/login" className={s.signIn}>
+              <Link
+                to="/login"
+                className={s.signIn}
+                onClick={() =>
+                  trackEvent("cta_click", {
+                    cta_id: "sign_in",
+                    cta_location: "nav",
+                  })
+                }
+              >
                 Sign In
               </Link>
               <Link
                 to="/login"
                 className={`${s.cta} ${s.ctaPrimary} ${s.ctaSm}`}
+                onClick={() =>
+                  trackEvent("sign_up_click", {
+                    cta_id: "get_started",
+                    cta_location: "nav",
+                  })
+                }
               >
                 Get Started
               </Link>
@@ -878,7 +925,17 @@ function NavBar({
                 {user ? (
                   <Link to="/dashboard">Open Dashboard</Link>
                 ) : (
-                  <Link to="/login">Sign In</Link>
+                  <Link
+                    to="/login"
+                    onClick={() =>
+                      trackEvent("cta_click", {
+                        cta_id: "sign_in",
+                        cta_location: "mobile_menu",
+                      })
+                    }
+                  >
+                    Sign In
+                  </Link>
                 )}
               </motion.span>
             </motion.nav>
@@ -1295,8 +1352,27 @@ function Pricing({ user }: { user: any }) {
     { value: "annual", label: "Annual" },
   ];
 
+  // pricing_view: the plans were actually on screen (once per page view).
+  const sectionRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = sectionRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry?.isIntersecting) return;
+        trackPricingView();
+        io.disconnect();
+      },
+      // In the upper 60% of the viewport, however tall the section is.
+      { rootMargin: "0px 0px -40% 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
   return (
     <section
+      ref={sectionRef}
       id="pricing"
       className={s.section}
       data-nav="pricing"
@@ -1385,6 +1461,14 @@ function Pricing({ user }: { user: any }) {
                   <Link
                     to="/login"
                     className={`${s.cta} ${s.planCta} ${s.ctaRoll}`}
+                    onClick={() =>
+                      trackEvent("sign_up_click", {
+                        cta_id: "choose_plan",
+                        cta_location: "pricing",
+                        plan_tier: tier,
+                        billing_period: billing,
+                      })
+                    }
                   >
                     <Roll>Choose {PLAN_TIER_LABELS[tier]}</Roll>
                     <span className={s.chip} aria-hidden="true">
@@ -1460,7 +1544,17 @@ function Footer({ signedIn }: { signedIn: boolean }) {
               <Link to="/profile">Profile</Link>
             </>
           ) : (
-            <Link to="/login">Sign In</Link>
+            <Link
+              to="/login"
+              onClick={() =>
+                trackEvent("cta_click", {
+                  cta_id: "sign_in",
+                  cta_location: "footer",
+                })
+              }
+            >
+              Sign In
+            </Link>
           )}
         </nav>
         <nav aria-label="Legal" className={s.footerCol}>

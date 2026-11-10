@@ -135,11 +135,11 @@ Resources:
                 - key: 'Content-Security-Policy'
                   value: >-
                     default-src 'self';
-                    script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://cdn.razorpay.com https://www.gstatic.com https://storage.googleapis.com;
+                    script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://cdn.razorpay.com https://www.gstatic.com https://storage.googleapis.com https://www.googletagmanager.com;
                     style-src 'self' 'unsafe-inline';
-                    img-src 'self' data: blob: https://praesto-189923011190.s3.ap-south-1.amazonaws.com https://tiles.openfreemap.org;
+                    img-src 'self' data: blob: https://praesto-189923011190.s3.ap-south-1.amazonaws.com https://tiles.openfreemap.org https://www.googletagmanager.com https://*.google-analytics.com;
                     font-src 'self' data:;
-                    connect-src 'self' https://api.praesto.in wss://api.praesto.in https://cdn.jsdelivr.net https://raw.githubusercontent.com https://tiles.openfreemap.org https://photon.komoot.io https://praesto-189923011190.s3.ap-south-1.amazonaws.com https://api.razorpay.com https://lumberjack.razorpay.com https://*.googleapis.com https://*.firebaseio.com;
+                    connect-src 'self' https://api.praesto.in wss://api.praesto.in https://cdn.jsdelivr.net https://raw.githubusercontent.com https://tiles.openfreemap.org https://photon.komoot.io https://praesto-189923011190.s3.ap-south-1.amazonaws.com https://api.razorpay.com https://lumberjack.razorpay.com https://*.googleapis.com https://*.firebaseio.com https://www.googletagmanager.com https://*.google-analytics.com https://*.analytics.google.com;
                     frame-src https://api.razorpay.com;
                     worker-src 'self' blob:;
                     manifest-src 'self';
