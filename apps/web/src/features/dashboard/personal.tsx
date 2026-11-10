@@ -254,7 +254,8 @@ function monthDays(
       .toLowerCase()
       .trim()
       .replace(/[\s_]+/g, "-");
-    // A recorded status wins; without a punch, a holiday or week off comes
+    // A recorded status wins, except that a leave spanning a holiday or week
+    // off doesn't repaint it. Without a punch, a holiday or week off comes
     // before "yet to punch in" / "no record".
     const dayOff: Kind | null = holidaySet.has(key)
       ? "holiday"
@@ -263,7 +264,7 @@ function monthDays(
         : null;
     let kind: Kind;
     if (d.isAfter(today, "day")) kind = dayOff ?? "future";
-    else if (st === "leave") kind = "leave";
+    else if (st === "leave" && !dayOff) kind = "leave";
     else if (st === "holiday") kind = "holiday";
     else if (st === "week-off") kind = "weekoff";
     // Today isn't decided until punch-out, whatever status the record holds.
