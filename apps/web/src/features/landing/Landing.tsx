@@ -37,6 +37,7 @@ import {
 } from "./MacBookShowcase";
 import { Abilities } from "./Abilities";
 import { LeaveFlow } from "./LeaveFlow";
+import { DemoTeaser } from "./DemoTeaser";
 import { Platform } from "./Platform";
 import {
   MaskedLines,
@@ -476,6 +477,8 @@ export default function Landing() {
             ))}
           </Reveal>
         </section>
+
+        <DemoTeaser />
 
         <LitSection
           id="security"
