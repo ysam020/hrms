@@ -183,6 +183,11 @@ function useChat() {
           m._id === messageId ? { ...m, isDeleted: true, content: null } : m,
         ),
       }));
+      // The server clears the pin along with the message.
+      setPinnedMessages((prev) => ({
+        ...prev,
+        [roomId]: (prev[roomId] || []).filter((m: any) => m._id !== messageId),
+      }));
       patchMessage(messageId, { isDeleted: true, content: null }).catch(
         console.error,
       );
@@ -484,6 +489,10 @@ function useChat() {
         ),
       };
     });
+    setPinnedMessages((prev) => ({
+      ...prev,
+      [roomId]: (prev[roomId] || []).filter((m: any) => m._id !== messageId),
+    }));
     patchMessage(messageId, { isDeleted: true, content: null }).catch(
       console.error,
     );
