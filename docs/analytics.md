@@ -1,7 +1,7 @@
 # Website analytics (GTM + GA4)
 
 Praesto's public website is measured with Google Tag Manager container
-`GTM-59723TZZ`, which runs the GA4 property `G-V2V9JQ9MFT`. Only production
+`GTM-59723TZZ`, which runs the GA4 property `G-58KVDDCH2W`. Only production
 (`praesto.in`) is measured, and only the public pages and the sign-up path.
 Nothing behind sign-in is ever sent.
 
@@ -13,7 +13,7 @@ Code: `apps/web/src/app/analytics.ts`. Tests:
 ```
 route change ── SessionRoot effect ── trackPageView(pathname)
                                          │
-              tracked path? ── no ──► GA switched off (ga-disable-G-V2V9JQ9MFT)
+              tracked path? ── no ──► GA switched off (ga-disable-G-58KVDDCH2W)
                    │ yes
               praesto.in, no GPC/DNT, no token in URL?
                    │ yes
@@ -41,7 +41,7 @@ UI actions ── trackEvent("sign_up_click" | …, params) ── dataLayer (on
   generate page views on its own (see the settings below), or they double
   up.
 - **Leaving the public area** (signing in, for example) sets
-  `window['ga-disable-G-V2V9JQ9MFT'] = true`, GA's documented kill switch. It
+  `window['ga-disable-G-58KVDDCH2W'] = true`, GA's documented kill switch. It
   stops the tag's automatic hits (`user_engagement`), which would otherwise
   carry app URLs such as `/employee-management/<username>`.
 - **Sanitised values:** `page_location` is `https://praesto.in` + path +
@@ -89,14 +89,15 @@ one for each of: `page_location`, `page_title`, `page_referrer`, `cta_id`,
 
 **Tags › New:**
 
-1. **Google tag**: Tag ID `G-V2V9JQ9MFT`. Under _Configuration settings_, add
-   parameter `send_page_view` = `false`. Trigger: **Initialization - All
-   Pages**.
-2. **GA4 Event – page_view**: Measurement ID `G-V2V9JQ9MFT`, Event name
+1. **Google tag** (the container already has one, destination "Praesto"; edit
+   it rather than adding a second): Tag ID `G-58KVDDCH2W`. Under
+   _Configuration settings_, add parameter `send_page_view` = `false`. Trigger:
+   **Initialization - All Pages**.
+2. **GA4 Event – page_view**: Measurement ID `G-58KVDDCH2W`, Event name
    `page_view`. Event parameters: `page_location` = `{{DLV - page_location}}`,
    `page_title` = `{{DLV - page_title}}`, `page_referrer` =
    `{{DLV - page_referrer}}`. Trigger: `CE - virtual_page_view`.
-3. **GA4 Event – custom events**: Measurement ID `G-V2V9JQ9MFT`, Event name
+3. **GA4 Event – custom events**: Measurement ID `G-58KVDDCH2W`, Event name
    `{{Event}}`. Event parameters: every DLV above except `page_title` and
    `page_referrer`, each with the same name. Trigger: `CE - praesto events`.
 
@@ -106,7 +107,20 @@ banner, so visitors in the EEA, UK and Switzerland are not measured at all,
 not even with cookieless pings.
 
 Do **not** add a History Change trigger, the All Pages page-view pattern, or
-any Custom HTML tag. Then **Submit › Publish**.
+any Custom HTML tag.
+
+**Turn off automatic user-provided data collection.** In the Google tag's
+settings (Tag Manager › the Google tag › _Tag settings_ / _Admin › Google tag
+› Configure your Google tag_), switch **Allow user-provided data
+capabilities** and **Automatic detection** (email, phone, address) off.
+`/org-setup` has company email and phone fields.
+
+**Change page views as one unit.** Setting `send_page_view = false`, turning
+off Enhanced Measurement's _browser history_ page views (below) and adding
+**GA4 Event – page_view** must go into the same published version. With only
+some of them, page views are either doubled or missing. Test in **Preview**
+(Tag Assistant on `https://praesto.in`): exactly one `page_view` per route.
+Then **Submit › Publish**.
 
 ## GA4 property settings (manual)
 

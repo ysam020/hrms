@@ -17,7 +17,7 @@
 // once per document, asynchronously, and only on praesto.in.
 //
 // GTM's job (configured in the container, see docs/analytics.md): one Google
-// tag for G-V2V9JQ9MFT with send_page_view = false, and GA4 event tags fired
+// tag for G-58KVDDCH2W with send_page_view = false, and GA4 event tags fired
 // by the dataLayer events pushed here. Page views come only from
 // trackPageView, so they can't double up with GTM history triggers or GA4
 // Enhanced Measurement, both of which must stay off.
@@ -32,7 +32,7 @@
 import { PUBLIC_PAGES, SITE_URL, normalizePath } from "./seo";
 
 export const GTM_ID = "GTM-59723TZZ";
-export const GA4_MEASUREMENT_ID = "G-V2V9JQ9MFT";
+export const GA4_MEASUREMENT_ID = "G-58KVDDCH2W";
 /** Only production is measured; dev, previews and local builds never load GTM. */
 export const ANALYTICS_HOSTS = ["praesto.in"];
 
