@@ -761,6 +761,37 @@ export function HlsPlayer({
   const onPrevRef = useRef(onPrev);
   onPrevRef.current = onPrev;
 
+  // Share: copy a link that opens this demo on /product-demo.
+  const [copied, setCopied] = useState<"ok" | "fail" | null>(null);
+  const copiedTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(copiedTimer.current), []);
+  const share = async () => {
+    const url = `${location.origin}/product-demo?v=${encodeURIComponent(video.id)}#explore`;
+    let ok = false;
+    try {
+      await navigator.clipboard.writeText(url);
+      ok = true;
+    } catch {
+      // Older browsers, or the clipboard API refused: a hidden field.
+      const field = document.createElement("textarea");
+      field.value = url;
+      field.setAttribute("readonly", "");
+      field.style.position = "fixed";
+      field.style.opacity = "0";
+      document.body.append(field);
+      field.select();
+      try {
+        ok = document.execCommand("copy");
+      } catch {
+        ok = false;
+      }
+      field.remove();
+    }
+    setCopied(ok ? "ok" : "fail");
+    window.clearTimeout(copiedTimer.current);
+    copiedTimer.current = window.setTimeout(() => setCopied(null), 2200);
+  };
+
   // Keyboard shortcuts work anywhere on the page, as on YouTube, except
   // while typing in a field. Space still activates a focused button outside
   // the player, and arrows still move within radios, tabs and sliders.
@@ -920,6 +951,13 @@ export function HlsPlayer({
             <Spinner
               label={status === "loading" ? "Loading video" : "Buffering"}
             />
+          </div>
+        )}
+        {copied && (
+          <div className={s.toast} role="status">
+            {copied === "ok"
+              ? "Link copied"
+              : "Couldn’t copy the link. Copy it from the address bar."}
           </div>
         )}
         {pip && (
@@ -1121,6 +1159,15 @@ export function HlsPlayer({
                   }))),
             ]}
           />
+          <button
+            type="button"
+            className={`${s.ctrl} ${s.share}`}
+            onClick={() => void share()}
+            aria-label={`Copy link to ${video.title}`}
+            title="Copy link"
+          >
+            {copied === "ok" ? <CheckGlyph /> : <LinkGlyph />}
+          </button>
           {pipSupported && (
             <button
               type="button"
@@ -1249,6 +1296,44 @@ function UpNext({
         </button>
       </div>
     </div>
+  );
+}
+
+function LinkGlyph() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      aria-hidden
+      focusable="false"
+    >
+      <path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1.2 1.2" />
+      <path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1.2-1.2" />
+    </svg>
+  );
+}
+
+function CheckGlyph() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="#7fd19b"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      focusable="false"
+    >
+      <path d="M5 12.5l4.5 4.5L19 7.5" />
+    </svg>
   );
 }
 
@@ -1451,7 +1536,7 @@ function MenuButton({
     }
   };
   return (
-    <div className={s.menuWrap}>
+    <div className={s.menuWrap} data-menu={id}>
       <button
         id={`pd-${id}-btn`}
         type="button"
