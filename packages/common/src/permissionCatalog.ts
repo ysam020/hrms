@@ -145,6 +145,8 @@ const PERMISSION_STRUCTURE: Record<string, Record<string, string[]>> = {
     view_billing: ["-"],
     manage_billing: ["-"],
     view_audit_logs: ["-"],
+    view_leads: ["-"],
+    manage_leads: ["-"],
   },
 };
 

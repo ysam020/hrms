@@ -200,4 +200,30 @@ export async function ensureMasterIndexes(): Promise<void> {
       error,
     });
   }
+
+  // Sales leads: the console's list and duplicate lookups, plus the TTL
+  // index that is the retention policy (each lead is deleted at purgeAt).
+  try {
+    await prisma.$runCommandRaw({
+      createIndexes: "leads",
+      indexes: [
+        {
+          key: { status: 1, createdAt: -1 },
+          name: "Lead_status_createdAt_idx",
+        },
+        { key: { email: 1, status: 1 }, name: "Lead_email_status_idx" },
+        { key: { ownerId: 1, status: 1 }, name: "Lead_ownerId_status_idx" },
+        { key: { createdAt: -1 }, name: "Lead_createdAt_idx" },
+        {
+          key: { purgeAt: 1 },
+          name: "Lead_purgeAt_ttl",
+          expireAfterSeconds: 0,
+        },
+      ],
+    });
+  } catch (error: unknown) {
+    logger.error("ensureMasterIndexes: failed to create lead indexes", {
+      error,
+    });
+  }
 }

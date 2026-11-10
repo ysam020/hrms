@@ -20,7 +20,9 @@ export type PlatformAction =
   | "view_tenants"
   | "view_billing"
   | "manage_billing"
-  | "view_audit_logs";
+  | "view_audit_logs"
+  | "view_leads"
+  | "manage_leads";
 
 type U = { platformAdmin?: string[] } | null | undefined;
 export const hasGrant = (u: U, action: PlatformAction) =>
@@ -31,12 +33,15 @@ export const canViewTenants = (u: U) => hasGrant(u, "view_tenants");
 export const canViewBilling = (u: U) => hasGrant(u, "view_billing");
 export const canManageBilling = (u: U) => hasGrant(u, "manage_billing");
 export const canViewAudit = (u: U) => hasGrant(u, "view_audit_logs");
+export const canViewLeads = (u: U) => hasGrant(u, "view_leads");
+export const canManageLeads = (u: U) => hasGrant(u, "manage_leads");
 
 /** The first console page this person may open. */
 export function consoleHome(u: U): string {
   if (canViewOverview(u)) return "/platform-admin";
   if (canViewTenants(u)) return "/platform-admin/tenants";
   if (canViewBilling(u)) return "/platform-admin/subscriptions";
+  if (canViewLeads(u)) return "/platform-admin/leads";
   if (canViewAudit(u)) return "/platform-admin/audit-logs";
   return "/dashboard";
 }

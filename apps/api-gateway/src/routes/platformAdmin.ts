@@ -2,12 +2,16 @@ import { Router } from "express";
 import { validate } from "../middleware/validate";
 import { requirePlatformAdmin } from "../middleware/requirePlatformAdmin";
 import * as h from "../handlers/platformAdmin";
+import * as leads from "../handlers/leads";
 import {
   platformRangeQuerySchema,
   platformTenantsQuerySchema,
   platformPaymentsQuerySchema,
   platformAuditQuerySchema,
   platformSyncSchema,
+  platformLeadsQuerySchema,
+  platformLeadUpdateSchema,
+  platformLeadNoteSchema,
 } from "../schemas";
 
 // The Praesto Platform Console's API. Mounted at /platform/admin behind
@@ -67,4 +71,40 @@ platformAdminRouter.get(
   requirePlatformAdmin("view_audit_logs"),
   validate(platformAuditQuerySchema, "query"),
   h.listAuditLogs,
+);
+
+// Website sales leads (handlers/leads.ts). Specific paths before :leadId.
+platformAdminRouter.get(
+  "/leads",
+  requirePlatformAdmin("view_leads"),
+  validate(platformLeadsQuerySchema, "query"),
+  leads.listLeads,
+);
+platformAdminRouter.get(
+  "/leads/metrics",
+  requirePlatformAdmin("view_leads"),
+  validate(platformRangeQuerySchema, "query"),
+  leads.getLeadMetrics,
+);
+platformAdminRouter.get(
+  "/leads/owners",
+  requirePlatformAdmin("view_leads"),
+  leads.listLeadOwners,
+);
+platformAdminRouter.get(
+  "/leads/:leadId",
+  requirePlatformAdmin("view_leads"),
+  leads.getLead,
+);
+platformAdminRouter.patch(
+  "/leads/:leadId",
+  requirePlatformAdmin("manage_leads"),
+  validate(platformLeadUpdateSchema),
+  leads.updateLead,
+);
+platformAdminRouter.post(
+  "/leads/:leadId/notes",
+  requirePlatformAdmin("manage_leads"),
+  validate(platformLeadNoteSchema),
+  leads.addLeadNote,
 );

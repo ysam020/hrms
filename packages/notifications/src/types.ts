@@ -42,6 +42,9 @@ export type NotificationEventType =
   | "supportTicketCreated"
   | "supportTicketReply"
   | "supportTicketUpdated"
+  // website leads → Praesto team, and the prospect's acknowledgement (api-gateway)
+  | "leadReceived"
+  | "leadAcknowledged"
   // performance-review-service
   | "performanceReviewAssigned"
   | "performanceReviewFinalized"

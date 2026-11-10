@@ -40,6 +40,7 @@ import {
 } from "@next/ui";
 import { PUBLIC_PAGES, applyPageMeta, normalizePath } from "./seo";
 import { trackPageView } from "./analytics";
+import { captureAttribution } from "./attribution";
 import { takeReturnPath } from "./returnPath";
 
 // Session orchestration for Praesto Next. Everything security-relevant — the
@@ -280,6 +281,7 @@ export function SessionRoot() {
     if (oauthLanding.current && normalizePath(location.pathname) === "/")
       return;
     oauthLanding.current = false;
+    captureAttribution(location.pathname);
     trackPageView(location.pathname);
   }, [location.pathname]);
 

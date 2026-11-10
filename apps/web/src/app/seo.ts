@@ -41,6 +41,18 @@ export const PUBLIC_PAGES: Record<string, PageMeta> = {
       "How Praesto subscriptions are billed, how to cancel, and how refunds are handled.",
     prerender: true,
   },
+  // Lead forms: not prerendered (served by the SPA fallback, so no hosting
+  // rewrite is needed), but titled, described and measured like the others.
+  "/book-demo": {
+    title: "Book a Demo · Praesto",
+    description:
+      "Book a demo of Praesto, HR software for attendance, leave, recruitment, payroll and approvals.",
+  },
+  "/contact": {
+    title: "Contact Sales · Praesto",
+    description:
+      "Talk to the Praesto team about plans, rollout or a custom HRMS solution for your organisation.",
+  },
   "/login": {
     title: "Sign In · Praesto",
     description:

@@ -18,6 +18,7 @@ import {
 import {
   canOpenConsole,
   canViewAudit,
+  canViewLeads,
   canViewBilling,
   canViewOverview,
   canViewTenants,
@@ -619,6 +620,16 @@ export const PLATFORM_NAV: NavModule[][] = [
       path: "/platform-admin/revenue",
       visible: canViewBilling,
       keywords: "mrr arr collections",
+    },
+  ],
+  [
+    {
+      id: "pa-leads",
+      label: "Leads",
+      icon: "inbox",
+      path: "/platform-admin/leads",
+      visible: canViewLeads,
+      keywords: "sales demo requests enquiries crm pipeline",
     },
   ],
   [

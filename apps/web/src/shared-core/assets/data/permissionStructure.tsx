@@ -160,6 +160,8 @@ export const permissionStructure = {
       view_billing: ["-"],
       manage_billing: ["-"],
       view_audit_logs: ["-"],
+      view_leads: ["-"],
+      manage_leads: ["-"],
     },
   },
   PerformanceReview: {

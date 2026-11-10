@@ -36,7 +36,9 @@ console. There is no separate roster.
 | Former (blocked) employees                                                                           | Nothing                                                             |
 
 Actions: `view_overview`, `view_tenants`, `view_billing`, `manage_billing`,
-`view_audit_logs` (`packages/common/src/permissionCatalog.ts`). They are
+`view_audit_logs`, `view_leads`, `manage_leads`
+(`packages/common/src/permissionCatalog.ts`). Leads are covered in
+docs/leads.md. They are
 platform-only: the gateway rejects them as unknown in any other org, and the
 web editor hides them.
 
@@ -64,6 +66,8 @@ web editor hides them.
 | POST `/platform/admin/billing/sync` `{reason}`                               | manage_billing  | Ledger backfill for every subscription. A Redis lease allows one run at a time. Audited                                            |
 | GET `/platform/admin/revenue`                                                | view_billing    | Collections, MRR/ARR, billed MRR, revenue by plan and by billing period                                                            |
 | GET `/platform/admin/audit-logs`                                             | view_audit_logs | Platform audit trail                                                                                                               |
+| GET `/platform/admin/leads`, `/leads/:id`, `/leads/owners`, `/leads/metrics` | view_leads      | Website sales leads: list (filters, search, counts), detail with contact details, assignable owners, funnel. See docs/leads.md     |
+| PATCH `/platform/admin/leads/:id`, POST `/platform/admin/leads/:id/notes`    | manage_leads    | Status, owner, contact dates; internal notes. Audited without personal details                                                     |
 
 \* Filtering by payment requires view_billing.
 

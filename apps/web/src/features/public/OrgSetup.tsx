@@ -397,6 +397,13 @@ export default function OrgSetup() {
                   plan_tier: planTierForCompanySize(f.companySize),
                   billing_period: f.billing,
                 });
+                // The trial started: the server created the organisation on
+                // the trial subscription set up above.
+                if (trial)
+                  trackEvent("free_trial_start", {
+                    plan_tier: planTierForCompanySize(f.companySize),
+                    billing_period: f.billing,
+                  });
                 if (!alive.current) return;
                 setAccessToken(res.data.data.accessToken);
                 setStep(2);

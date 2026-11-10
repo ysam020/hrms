@@ -28,6 +28,7 @@ import { canRaiseSupport, isSupportAgent } from "@next/features/support/config";
 import {
   canOpenConsole,
   canViewAudit,
+  canViewLeads,
   canViewBilling,
   canViewOverview,
   canViewTenants,
@@ -183,7 +184,9 @@ const F = {
   paTenants: () => import("@next/features/platform-admin/Tenants"),
   paBilling: () => import("@next/features/platform-admin/Billing"),
   paAudit: () => import("@next/features/platform-admin/AuditLog"),
+  paLeads: () => import("@next/features/platform-admin/Leads"),
   publicPages: () => import("@next/features/public/Public"),
+  leadForm: () => import("@next/features/public/LeadForm"),
   aiAssistants: () => import("@next/features/assistant/AiAssistants"),
   connectAuthorize: () => import("@next/features/assistant/ConnectAuthorize"),
   orgSetup: () => import("@next/features/public/OrgSetup"),
@@ -446,6 +449,14 @@ const appRoutes: RouteObject[] = [
     ...page(F.paBilling, "PlatformRevenue", canViewBilling),
   },
   {
+    path: "platform-admin/leads",
+    ...page(F.paLeads, "default", canViewLeads),
+  },
+  {
+    path: "platform-admin/leads/:leadId",
+    ...page(F.paLeads, "PlatformLeadDetail", canViewLeads),
+  },
+  {
     path: "platform-admin/audit-logs",
     ...page(F.paAudit, "default", canViewAudit),
   },
@@ -503,6 +514,8 @@ export const router = createBrowserRouter(
         },
         { path: "/terms-of-use", ...page(F.publicPages, "TermsPage") },
         { path: "/refund-policy", ...page(F.publicPages, "RefundPolicyPage") },
+        { path: "/book-demo", ...page(F.leadForm, "BookDemoPage") },
+        { path: "/contact", ...page(F.leadForm, "ContactPage") },
         // Public landing page, open to everyone (signed in or not).
         {
           path: "/",

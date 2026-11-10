@@ -160,13 +160,33 @@ describe("applyRateLimiters", () => {
         "/api/v1/profile",
         expect.any(RegExp), // PUBLIC_ROUTES_REGEX
         expect.any(RegExp), // DRAFT_RECOVERY_REGEX
+        "/api/v1/public/leads", // the website's lead form
         "/api",
       ]),
     );
     // + the application-write limiter, mounted as plain middleware.
-    expect(app.use).toHaveBeenCalledTimes(7);
+    expect(app.use).toHaveBeenCalledTimes(8);
     // The catch-all general limiter stays last.
     expect(calls[calls.length - 1][0]).toBe("/api");
+  });
+
+  it("gives the website lead form its own limit: 5 POSTs per IP per hour", () => {
+    const opts = capturedOptions.find(
+      (o) => o.store?.primary?.__options?.prefix === "rl:lead-write:",
+    );
+    expect(opts).toMatchObject({ windowMs: 60 * 60 * 1000, max: 5 });
+    expect(opts.keyGenerator({ ip: "1.2.3.4", headers: {} })).toBe(
+      "ip:normalized:1.2.3.4",
+    );
+
+    const app: any = { use: jest.fn() };
+    applyRateLimiters(app);
+    const [, mw] = app.use.mock.calls.find(
+      (c: any[]) => c[0] === "/api/v1/public/leads",
+    );
+    const next = jest.fn();
+    mw({ method: "GET" }, {}, next); // reads pass straight through
+    expect(next).toHaveBeenCalledTimes(1);
   });
 
   it("applies the auth limiter's regex to a known webauthn login route", () => {

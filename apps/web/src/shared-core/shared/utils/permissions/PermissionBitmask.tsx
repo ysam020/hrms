@@ -156,6 +156,9 @@ const PERM_DEFS = [
   ["PraestoAdmin", "view_billing"],
   ["PraestoAdmin", "manage_billing"],
   ["PraestoAdmin", "view_audit_logs"],
+  // Website sales leads (appended, so earlier bits are unchanged).
+  ["PraestoAdmin", "view_leads"],
+  ["PraestoAdmin", "manage_leads"],
 ];
 
 // PERM_META["Module:action"] = { scopelessBit?, scopeBits?: { scope: BigInt } }

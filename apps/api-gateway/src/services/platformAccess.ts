@@ -23,6 +23,9 @@ export const PLATFORM_ADMIN_ACTIONS = [
   "view_billing",
   "manage_billing",
   "view_audit_logs",
+  // Website sales leads: personal contact details, so need-to-know too.
+  "view_leads",
+  "manage_leads",
 ] as const;
 export type PlatformAdminAction = (typeof PLATFORM_ADMIN_ACTIONS)[number];
 

@@ -158,6 +158,28 @@ describe("custom events", () => {
     expect(click.cta_location).toBe("nav");
   });
 
+  it("measures the lead form pages and sends form conversions with form_type only", () => {
+    go("/book-demo?utm_source=linkedin&email=a%40b.com");
+    trackPageView("/book-demo");
+    trackEvent("demo_request", { form_type: "demo" });
+    const [view] = events("virtual_page_view");
+    expect(view.page_location).toBe(
+      "https://praesto.in/book-demo?utm_source=linkedin",
+    );
+    const [demo] = events("demo_request");
+    const sent = Object.fromEntries(
+      Object.entries(demo).filter(([, v]) => v !== undefined),
+    );
+    expect(sent).toEqual({
+      event: "demo_request",
+      form_type: "demo",
+      page_location: "https://praesto.in/book-demo?utm_source=linkedin",
+    });
+    go("/contact");
+    trackPageView("/contact");
+    expect(events("virtual_page_view")).toHaveLength(2);
+  });
+
   it("sends pricing_view once per page view", () => {
     trackPageView("/");
     trackPricingView();

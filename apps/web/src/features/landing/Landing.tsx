@@ -62,7 +62,7 @@ import s from "./landing.module.css";
  *
  * Getting started is Praesto's real onboarding: sign in with Google, and an
  * account without an organisation is taken through organisation setup and
- * checkout. So "Get Started" and "Sign In" both lead to /login.
+ * checkout. So "Start Free Trial" and "Sign In" both lead to /login.
  */
 
 const SHOT = "/images/product-showcase";
@@ -559,27 +559,27 @@ export default function Landing() {
                       className={`${s.cta} ${s.ctaPrimary} ${s.ctaRoll}`}
                       onClick={() =>
                         trackEvent("sign_up_click", {
-                          cta_id: "get_started",
+                          cta_id: "start_trial",
                           cta_location: "closing",
                         })
                       }
                     >
-                      <Roll>Get Started</Roll>
+                      <Roll>Start Free Trial</Roll>
                       <span className={s.chip} aria-hidden="true">
                         <Arrow />
                       </span>
                     </Link>
                     <Link
-                      to="/login"
+                      to="/book-demo"
                       className={`${s.cta} ${s.ctaGhost}`}
                       onClick={() =>
                         trackEvent("cta_click", {
-                          cta_id: "sign_in",
+                          cta_id: "book_demo",
                           cta_location: "closing",
                         })
                       }
                     >
-                      <Roll>Sign In</Roll>
+                      <Roll>Book a Demo</Roll>
                     </Link>
                   </>
                 )}
@@ -675,29 +675,44 @@ function Hero({ still, signedIn }: { still: boolean; signedIn: boolean }) {
             onClick={() =>
               !signedIn &&
               trackEvent("sign_up_click", {
-                cta_id: "get_started",
+                cta_id: "start_trial",
                 cta_location: "hero",
               })
             }
           >
-            <Roll>{signedIn ? "Open Dashboard" : "Get Started"}</Roll>
+            <Roll>{signedIn ? "Open Dashboard" : "Start Free Trial"}</Roll>
             <span className={s.chip} aria-hidden="true">
               <Arrow />
             </span>
           </Link>
-          <a
-            href="#features"
-            className={`${s.cta} ${s.ctaGhost}`}
-            onClick={() =>
-              trackEvent("cta_click", {
-                cta_id: "explore_platform",
-                cta_location: "hero",
-              })
-            }
-          >
-            <Roll>Explore the Platform</Roll>
-            <Icon name="chevronDown" size={14} className={s.nudge} />
-          </a>
+          {signedIn ? (
+            <a
+              href="#features"
+              className={`${s.cta} ${s.ctaGhost}`}
+              onClick={() =>
+                trackEvent("cta_click", {
+                  cta_id: "explore_platform",
+                  cta_location: "hero",
+                })
+              }
+            >
+              <Roll>Explore the Platform</Roll>
+              <Icon name="chevronDown" size={14} className={s.nudge} />
+            </a>
+          ) : (
+            <Link
+              to="/book-demo"
+              className={`${s.cta} ${s.ctaGhost}`}
+              onClick={() =>
+                trackEvent("cta_click", {
+                  cta_id: "book_demo",
+                  cta_location: "hero",
+                })
+              }
+            >
+              <Roll>Book a Demo</Roll>
+            </Link>
+          )}
         </motion.div>
       </div>
 
@@ -880,12 +895,12 @@ function NavBar({
                 className={`${s.cta} ${s.ctaPrimary} ${s.ctaSm}`}
                 onClick={() =>
                   trackEvent("sign_up_click", {
-                    cta_id: "get_started",
+                    cta_id: "start_trial",
                     cta_location: "nav",
                   })
                 }
               >
-                Get Started
+                Start Free Trial
               </Link>
             </>
           )}
@@ -925,17 +940,30 @@ function NavBar({
                 {user ? (
                   <Link to="/dashboard">Open Dashboard</Link>
                 ) : (
-                  <Link
-                    to="/login"
-                    onClick={() =>
-                      trackEvent("cta_click", {
-                        cta_id: "sign_in",
-                        cta_location: "mobile_menu",
-                      })
-                    }
-                  >
-                    Sign In
-                  </Link>
+                  <>
+                    <Link
+                      to="/book-demo"
+                      onClick={() =>
+                        trackEvent("cta_click", {
+                          cta_id: "book_demo",
+                          cta_location: "mobile_menu",
+                        })
+                      }
+                    >
+                      Book a Demo
+                    </Link>
+                    <Link
+                      to="/login"
+                      onClick={() =>
+                        trackEvent("cta_click", {
+                          cta_id: "sign_in",
+                          cta_location: "mobile_menu",
+                        })
+                      }
+                    >
+                      Sign In
+                    </Link>
+                  </>
                 )}
               </motion.span>
             </motion.nav>
@@ -1507,6 +1535,38 @@ function Pricing({ user }: { user: any }) {
             </a>
             .
           </p>
+          <div className={s.salesRow}>
+            <p>
+              Rolling out to a larger team, or need something specific to your
+              organisation?
+            </p>
+            <div className={s.actions}>
+              <Link
+                to="/contact"
+                className={`${s.cta} ${s.ctaGhost}`}
+                onClick={() =>
+                  trackEvent("cta_click", {
+                    cta_id: "contact_sales",
+                    cta_location: "pricing",
+                  })
+                }
+              >
+                Contact Sales
+              </Link>
+              <Link
+                to="/contact?topic=custom"
+                className={s.textLink}
+                onClick={() =>
+                  trackEvent("cta_click", {
+                    cta_id: "custom_solution",
+                    cta_location: "pricing",
+                  })
+                }
+              >
+                Get a Custom HRMS Solution
+              </Link>
+            </div>
+          </div>
         </div>
       </Reveal>
     </section>
@@ -1562,6 +1622,31 @@ function Footer({ signedIn }: { signedIn: boolean }) {
           <Link to="/privacy-policy">Privacy Policy</Link>
           <Link to="/terms-of-use">Terms of Use</Link>
           <Link to="/refund-policy">Refund Policy</Link>
+        </nav>
+        <nav aria-label="Sales" className={s.footerCol}>
+          <p className={s.footerHead}>Sales</p>
+          <Link
+            to="/book-demo"
+            onClick={() =>
+              trackEvent("cta_click", {
+                cta_id: "book_demo",
+                cta_location: "footer",
+              })
+            }
+          >
+            Book a Demo
+          </Link>
+          <Link
+            to="/contact"
+            onClick={() =>
+              trackEvent("cta_click", {
+                cta_id: "contact_sales",
+                cta_location: "footer",
+              })
+            }
+          >
+            Contact Sales
+          </Link>
         </nav>
         <div className={s.footerCol}>
           <p className={s.footerHead}>Contact</p>
