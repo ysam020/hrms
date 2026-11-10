@@ -1,4 +1,9 @@
-import { CDN_CONFIGURED, cdn, clock, type DemoVideo } from "./catalogue";
+import {
+  CDN_CONFIGURED,
+  clock,
+  thumbnailSrc,
+  type DemoVideo,
+} from "./catalogue";
 import s from "./productDemo.module.css";
 
 /** A video's thumbnail with its length (and "Now Playing" on the current one). */
@@ -7,7 +12,8 @@ export function Thumb({ video, now }: { video: DemoVideo; now?: boolean }) {
     <span className={s.thumbBox}>
       {CDN_CONFIGURED && (
         <img
-          src={cdn(video.thumbnail)}
+          src={thumbnailSrc(video.thumbnail)}
+          crossOrigin="anonymous"
           alt=""
           loading="lazy"
           decoding="async"

@@ -18,8 +18,8 @@ import {
   MODULES,
   ORDER,
   TOUR,
-  cdn,
   chapterAt,
+  thumbnailSrc,
   clock,
   findVideo,
   type DemoModule,
@@ -295,7 +295,8 @@ export default function ProductDemo() {
               >
                 {CDN_CONFIGURED && (
                   <img
-                    src={cdn(FILM.thumbnail)}
+                    src={thumbnailSrc(FILM.thumbnail)}
+                    crossOrigin="anonymous"
                     alt=""
                     width={1280}
                     height={720}

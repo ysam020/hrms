@@ -57,6 +57,18 @@ const base = (import.meta.env.VITE_PRODUCT_DEMO_CDN_URL ?? "").replace(
 export const CDN_CONFIGURED = base.length > 0;
 export const cdn = (path: string) => `${base}/${path.replace(/^\/+/, "")}`;
 
+/**
+ * A thumbnail as the page loads it: always as a CORS request (crossOrigin
+ * on every <img>), and under its own URL. The player's poster is a CORS
+ * request (<video crossorigin>), and S3 sends CORS headers, and Vary:
+ * Origin, only when asked; a plain <img> of the same URL would be cached
+ * for a year without them and then refused for the poster. The query string
+ * keeps clear of copies browsers cached that way. (Not "?cors": S3 reads
+ * that as its own CORS API and answers 403. Link previews and search use
+ * the plain URL: no CORS there.)
+ */
+export const thumbnailSrc = (path: string) => `${cdn(path)}?img=1`;
+
 export function findVideo(id: string | null | undefined) {
   if (TOUR && FILM && id === FILM.id) return { module: TOUR, video: FILM };
   for (const m of MODULES) {
