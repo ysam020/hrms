@@ -424,6 +424,10 @@ services:
     build:
       context: .
       dockerfile: ./docker/web.Dockerfile
+      args:
+        # The product demo videos (public S3 prefix, docs/product-demo.md).
+        # Override in .env to point elsewhere.
+        VITE_PRODUCT_DEMO_CDN_URL: ${VITE_PRODUCT_DEMO_CDN_URL:-https://praesto-product-demo-189923011190.s3.ap-south-1.amazonaws.com/product-demo}
     ports:
       - "80:80"
       - "443:443"
