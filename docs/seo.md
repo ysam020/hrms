@@ -1,8 +1,8 @@
 # SEO and the public pages
 
 praesto.in is one Vite + React SPA (apps/web). The public pages — `/`,
-`/privacy-policy`, `/terms-of-use`, `/refund-policy` — are **prerendered at
-build time** so crawlers, link previews and first paint get real HTML. The
+`/privacy-policy`, `/terms-of-use`, `/refund-policy`, `/product-demo` — are
+**prerendered at build time** so crawlers, link previews and first paint get real HTML. The
 signed-in app is unchanged.
 
 ## How it works
@@ -54,6 +54,11 @@ app isn't managed by a stack, so they are applied by hand. Order matters
     "status": "200"
   },
   {
+    "source": "/product-demo",
+    "target": "/product-demo.html",
+    "status": "200"
+  },
+  {
     "source": "</^[^.]+$|\\.(?!(css|gif|ico|jpg|jpeg|js|png|txt|xml|svg|webp|wasm|woff|woff2|ttf|map|json)$)([^.]+$)/>",
     "target": "/index.html",
     "status": "200"
@@ -78,7 +83,7 @@ except `/` answer `301` to a trailing-slash URL and then `404`.
 After applying, check:
 
 ```sh
-for p in / /privacy-policy /terms-of-use /refund-policy /sitemap.xml /robots.txt /dashboard; do
+for p in / /privacy-policy /terms-of-use /refund-policy /product-demo /sitemap.xml /robots.txt /dashboard; do
   curl -s -o /dev/null -w "%{http_code} $p\n" "https://praesto.in$p"; done   # all 200
 curl -sI https://www.praesto.in/terms-of-use | grep -i -E "^HTTP|^location"   # 301 → https://praesto.in/terms-of-use
 curl -s https://praesto.in/terms-of-use | grep -o "<h1[^>]*>[^<]*"            # the page's own H1

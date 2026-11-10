@@ -12,7 +12,13 @@ import TermsOfUsePage from "@web/pages/legal/TermsOfUsePage";
 import RefundPolicyPage from "@web/pages/legal/RefundPolicyPage";
 import { MotionProvider } from "@next/motion";
 import Landing from "@next/features/landing/Landing";
+import ProductDemo from "@next/features/product-demo/ProductDemo";
 import { OG_IMAGE, PUBLIC_PAGES, SITE_NAME, SITE_URL } from "@next/app/seo";
+import {
+  CDN_CONFIGURED,
+  MODULES as DEMO_MODULES,
+  cdn,
+} from "@next/features/product-demo/catalogue";
 
 // Build-time render of the public pages for scripts/prerender.mjs: the same
 // components the app mounts, as an anonymous visitor sees them. The browser
@@ -26,6 +32,7 @@ const PAGES: Record<string, ComponentType> = {
   "/privacy-policy": PrivacyPolicyPage,
   "/terms-of-use": TermsOfUsePage,
   "/refund-policy": RefundPolicyPage,
+  "/product-demo": ProductDemo,
 };
 
 const anonymous = { user: null, setUser: () => {}, handleLogout: () => {} };
@@ -52,6 +59,7 @@ const TIERS: PlanTier[] = ["starter", "growth", "enterprise"];
  * ratings or reviews — there are none to cite.
  */
 export function structuredData(path: string): object[] {
+  if (path === "/product-demo") return productDemoData();
   if (path !== "/") return [];
   const org = `${SITE_URL}/#organization`;
   return [
@@ -98,6 +106,43 @@ export function structuredData(path: string): object[] {
           })),
         },
       ],
+    },
+  ];
+}
+
+/**
+ * /product-demo: every demo as a VideoObject, so search engines can list
+ * them. Needs the CDN's absolute URLs, so only when the build knows it.
+ */
+function productDemoData(): object[] {
+  if (!CDN_CONFIGURED) return [];
+  const iso = (s: number) => `PT${Math.floor(s / 60)}M${Math.round(s % 60)}S`;
+  return [
+    {
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      name: "Praesto product demos",
+      itemListElement: DEMO_MODULES.flatMap((m) => m.videos).map((v, i) => ({
+        "@type": "ListItem",
+        position: i + 1,
+        url: `${SITE_URL}/product-demo?v=${v.id}`,
+        item: {
+          "@type": "VideoObject",
+          name: v.title,
+          description: v.description,
+          thumbnailUrl: cdn(v.thumbnail),
+          uploadDate: v.recorded,
+          duration: iso(v.duration),
+          contentUrl: cdn(v.hls),
+          embedUrl: `${SITE_URL}/product-demo?v=${v.id}`,
+          inLanguage: "en",
+          publisher: {
+            "@type": "Organization",
+            name: SITE_NAME,
+            url: `${SITE_URL}/`,
+          },
+        },
+      })),
     },
   ];
 }

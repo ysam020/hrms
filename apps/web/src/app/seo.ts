@@ -41,6 +41,12 @@ export const PUBLIC_PAGES: Record<string, PageMeta> = {
       "How Praesto subscriptions are billed, how to cancel, and how refunds are handled.",
     prerender: true,
   },
+  "/product-demo": {
+    title: "Explore Praesto HRMS | Interactive Product Demo",
+    description:
+      "Explore Praesto HRMS through interactive product demonstrations covering attendance, payroll, employee management, leave management, recruitment, and more.",
+    prerender: true,
+  },
   // Lead forms: not prerendered (served by the SPA fallback, so no hosting
   // rewrite is needed), but titled, described and measured like the others.
   "/book-demo": {
