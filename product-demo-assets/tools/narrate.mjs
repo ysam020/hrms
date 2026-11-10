@@ -89,7 +89,7 @@ const duration = (file) =>
 
 const run = promisify(execFile);
 
-async function synth(lang, spoken) {
+export async function synth(lang, spoken) {
   const key = createHash("sha1")
     .update(`${VOICE.id}|${VOICE.engine}|${lang}|${spoken}`)
     .digest("hex")
@@ -140,7 +140,7 @@ async function synth(lang, spoken) {
 }
 
 /** Run `jobs` (async functions) with at most `n` at a time. */
-async function pool(jobs, n) {
+export async function pool(jobs, n) {
   const out = new Array(jobs.length);
   let next = 0;
   await Promise.all(

@@ -122,6 +122,7 @@ export type EventParams = {
     | "choose_plan"
     | "sign_in"
     | "explore_platform"
+    | "watch_tour"
     | "book_demo"
     | "contact_sales"
     | "custom_solution";

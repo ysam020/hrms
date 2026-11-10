@@ -116,3 +116,18 @@ See `product-demo-assets/README.md`: edit `tools/flows.mjs`, then record,
 build, validate and upload. Each video's S3 path includes a content
 revision, so new uploads never collide with cached old ones. Old revisions
 can be deleted from S3 once the new web build is live.
+
+## The complete tour
+
+A single film of the whole product (`product-demo-assets/tools/film.mjs`),
+for YouTube and for sharing with anyone who wants everything in one sitting.
+It's in the manifest as `film`, served like the demos from
+`film/praesto-tour/<rev>/`. In the web app:
+
+- /product-demo features it above the module tabs, and the hero's play
+  button starts it (`?v=praesto-tour`);
+- the landing page's "See them in action" section links to it.
+
+The YouTube upload files (MP4 in English and Hindi, subtitles, thumbnail,
+and a description with chapters) are in `product-demo-assets/film/youtube/`,
+and aren't uploaded anywhere automatically.

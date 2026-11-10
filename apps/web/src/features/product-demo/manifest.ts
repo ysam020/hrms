@@ -1642,4 +1642,78 @@ export default {
       ],
     },
   ],
+  film: {
+    id: "praesto-tour",
+    title: "Praesto: The Complete Tour",
+    description:
+      "Every part of Praesto in one film: setting up, the screens everyone uses, employees, attendance, leave, payroll, recruitment, performance, the workplace, reports, security and AI.",
+    duration: 1018.5,
+    recorded: "2026-11-10",
+    thumbnail: "film/praesto-tour/dd2dbdce1b/thumbnail.jpg",
+    hls: "film/praesto-tour/dd2dbdce1b/master.m3u8",
+    subtitles: {
+      en: "film/praesto-tour/dd2dbdce1b/subtitles/en.vtt",
+      hi: "film/praesto-tour/dd2dbdce1b/subtitles/hi.vtt",
+    },
+    chapters: [
+      {
+        title: "Introduction",
+        startTime: 0,
+      },
+      {
+        title: "Getting Started",
+        startTime: 36.3,
+      },
+      {
+        title: "Platform Overview",
+        startTime: 136.9,
+      },
+      {
+        title: "Employees",
+        startTime: 218.7,
+      },
+      {
+        title: "Attendance",
+        startTime: 297.1,
+      },
+      {
+        title: "Leave",
+        startTime: 395.1,
+      },
+      {
+        title: "Payroll",
+        startTime: 475.6,
+      },
+      {
+        title: "Recruitment",
+        startTime: 566.1,
+      },
+      {
+        title: "Performance",
+        startTime: 667.6,
+      },
+      {
+        title: "Workplace",
+        startTime: 717.5,
+      },
+      {
+        title: "Reports & Analytics",
+        startTime: 788.7,
+      },
+      {
+        title: "Security & Admin",
+        startTime: 855.2,
+      },
+      {
+        title: "AI & Support",
+        startTime: 927.3,
+      },
+      {
+        title: "Try Praesto",
+        startTime: 1000.4,
+      },
+    ],
+    qualities: [1080, 720, 480, 360],
+    audio: ["en", "hi"],
+  },
 };

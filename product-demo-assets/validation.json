@@ -628,5 +628,19 @@
     "chapters": 2,
     "ok": true,
     "errors": []
+  },
+  {
+    "video": "film/praesto-tour",
+    "renditions": ["1080p", "720p", "480p", "360p"],
+    "duration": 1018.5,
+    "segments": 255,
+    "sizeMB": 395.3,
+    "enLUFS": -16.1,
+    "hiLUFS": -16.2,
+    "audio": "en+hi",
+    "cues": 138,
+    "chapters": 14,
+    "ok": true,
+    "errors": []
   }
 ]
