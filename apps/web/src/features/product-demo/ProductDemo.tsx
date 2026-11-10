@@ -22,7 +22,12 @@ import {
   type DemoModule,
   type DemoVideo,
 } from "./catalogue";
-import { HlsPlayer, PlayGlyph, type PlayerHandle } from "./HlsPlayer";
+import {
+  HlsPlayer,
+  PlayGlyph,
+  type Neighbour,
+  type PlayerHandle,
+} from "./HlsPlayer";
 import s from "./productDemo.module.css";
 
 /**
@@ -103,6 +108,35 @@ export default function ProductDemo() {
     },
     [select],
   );
+
+  // Every demo in catalogue order: through each module, then the next one.
+  // Previous / Next and Up Next move along this list.
+  const order = useMemo(
+    () => MODULES.flatMap((m) => m.videos.map((v) => ({ m, v }))),
+    [],
+  );
+  const at = order.findIndex((x) => x.v.id === video.id);
+  const neighbour = (i: number): Neighbour | null => {
+    const x = order[i];
+    return x
+      ? {
+          id: x.v.id,
+          title: x.v.title,
+          module: x.m.title,
+          thumbnail: x.v.thumbnail,
+          duration: x.v.duration,
+        }
+      : null;
+  };
+  const next = neighbour(at + 1);
+  const prev = neighbour(at - 1);
+  /** Move to another demo and play it, without scrolling the page. */
+  const goTo = (i: number) => {
+    const x = order[i];
+    if (!x) return;
+    select(x.m, x.v);
+    requestAnimationFrame(() => player.current?.seek(0));
+  };
 
   const related = useMemo(() => {
     const same = mod.videos.filter((v) => v.id !== video.id);
@@ -279,6 +313,10 @@ export default function ProductDemo() {
                       ref={player}
                       video={video}
                       onTime={setTime}
+                      next={next}
+                      prev={prev}
+                      onNext={() => goTo(at + 1)}
+                      onPrev={() => goTo(at - 1)}
                       chaptersSlot={
                         <div className={s.fsChapters} aria-label="Chapters">
                           {video.chapters.map((c, i) => (

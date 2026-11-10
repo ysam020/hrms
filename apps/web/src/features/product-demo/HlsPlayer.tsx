@@ -86,12 +86,38 @@ function prefersNativeHls(video: HTMLVideoElement) {
 
 const MAX_NETWORK_RETRIES = 3;
 
+/** Seconds before the next demo starts on its own. */
+export const AUTOPLAY_SECONDS = 5;
+const AUTOPLAY_KEY = "pd-autoplay";
+
+/** A neighbouring demo, for Up Next and the previous/next buttons. */
+export type Neighbour = {
+  id: string;
+  title: string;
+  module: string;
+  thumbnail: string;
+  duration: number;
+};
+
+/** Autoplay is on unless this viewer turned it off (remembered per browser). */
+function readAutoplay() {
+  try {
+    return localStorage.getItem(AUTOPLAY_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
 export function HlsPlayer({
   video,
   ref,
   onTime,
   onEnded,
   chaptersSlot,
+  next,
+  prev,
+  onNext,
+  onPrev,
 }: {
   video: DemoVideo;
   ref?: Ref<PlayerHandle>;
@@ -100,6 +126,11 @@ export function HlsPlayer({
   onEnded?: () => void;
   /** Rendered under the controls in fullscreen (chapter list). */
   chaptersSlot?: ReactNode;
+  /** The demos either side of this one, in catalogue order. */
+  next?: Neighbour | null;
+  prev?: Neighbour | null;
+  onNext?: () => void;
+  onPrev?: () => void;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -136,6 +167,12 @@ export function HlsPlayer({
   const [idle, setIdle] = useState(false);
   const [loadKey, setLoadKey] = useState(0);
   const [started, setStarted] = useState(false);
+  // End of video: the Up Next panel, and the autoplay countdown in it.
+  const [ended, setEnded] = useState(false);
+  const [autoplay, setAutoplay] = useState(readAutoplay);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  /** Cancel stops this countdown only; the Autoplay switch stays as set. */
+  const [cancelled, setCancelled] = useState(false);
 
   const onTimeRef = useRef(onTime);
   onTimeRef.current = onTime;
@@ -304,6 +341,9 @@ export function HlsPlayer({
     lastVideo.current = video.id;
     setTime(0);
     setCue(null);
+    setEnded(false);
+    setCountdown(null);
+    setCancelled(false);
     setDuration(video.duration);
     retries.current = 0;
     if (!engaged.current) setStarted(false);
@@ -352,7 +392,26 @@ export function HlsPlayer({
     el.addEventListener("seeking", () => setBuffering(true), opt);
     for (const t of ["playing", "canplay", "seeked", "pause"] as const)
       el.addEventListener(t, () => setBuffering(false), opt);
-    el.addEventListener("ended", () => onEndedRef.current?.(), opt);
+    el.addEventListener(
+      "ended",
+      () => {
+        setEnded(true);
+        onEndedRef.current?.();
+      },
+      opt,
+    );
+    // Playing again (Replay, a seek back, a chapter) leaves the panel.
+    for (const t of ["play", "seeking"] as const)
+      el.addEventListener(
+        t,
+        () => {
+          if (!el.ended) {
+            setEnded(false);
+            setCountdown(null);
+          }
+        },
+        opt,
+      );
     el.addEventListener(
       "volumechange",
       () => {
@@ -510,8 +569,54 @@ export function HlsPlayer({
     setLoadKey((k) => k + 1);
   };
 
+  // Autoplay: when a video ends and there's a next one, count down and
+  // start it. Cancel stops the count; the panel stays with Play Now.
+  const onNextRef = useRef(onNext);
+  onNextRef.current = onNext;
+  const nextId = next?.id;
+  useEffect(() => {
+    if (!ended || !autoplay || !nextId || cancelled) return;
+    const startAt = Date.now();
+    setCountdown(AUTOPLAY_SECONDS);
+    const id = window.setInterval(() => {
+      const left = AUTOPLAY_SECONDS - (Date.now() - startAt) / 1000;
+      if (left <= 0) {
+        window.clearInterval(id);
+        setCountdown(null);
+        onNextRef.current?.();
+      } else setCountdown(left);
+    }, 100);
+    return () => window.clearInterval(id);
+  }, [ended, autoplay, nextId, cancelled]);
+
+  const toggleAutoplay = () => {
+    setAutoplay((on) => {
+      try {
+        localStorage.setItem(AUTOPLAY_KEY, on ? "off" : "on");
+      } catch {
+        /* blocked storage: the choice lasts for this page */
+      }
+      return !on;
+    });
+  };
+  const cancelAutoplay = () => {
+    setCancelled(true);
+    setCountdown(null);
+  };
+  const replay = () => {
+    setEnded(false);
+    seekTo(0);
+  };
+
   const onKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).closest("input,[role=menu]")) return;
+    // Shift+N / Shift+P: next and previous demo.
+    if (e.shiftKey && (e.key === "N" || e.key === "P")) {
+      e.preventDefault();
+      if (e.key === "N" && next) onNext?.();
+      if (e.key === "P" && prev) onPrev?.();
+      return;
+    }
     const k = e.key.toLowerCase();
     const map: Record<string, () => void> = {
       " ": togglePlay,
@@ -617,7 +722,16 @@ export function HlsPlayer({
             <PlayGlyph size={30} />
           </button>
         )}
-        {started && status === "ready" && !playing && !buffering && (
+        {ended && (
+          <UpNext
+            next={next ?? null}
+            countdown={autoplay && !cancelled ? countdown : null}
+            onPlay={() => onNext?.()}
+            onCancel={cancelAutoplay}
+            onReplay={replay}
+          />
+        )}
+        {started && status === "ready" && !playing && !buffering && !ended && (
           <button
             type="button"
             className={s.bigPlay}
@@ -655,11 +769,33 @@ export function HlsPlayer({
         <div className={s.controlRow}>
           <button
             type="button"
+            className={`${s.ctrl} ${s.skip}`}
+            onClick={onPrev}
+            disabled={!prev}
+            aria-label={
+              prev ? `Previous: ${prev.title} (Shift+P)` : "No previous demo"
+            }
+            title={prev ? `Previous: ${prev.title}` : undefined}
+          >
+            <SkipGlyph dir="prev" />
+          </button>
+          <button
+            type="button"
             className={s.ctrl}
             onClick={togglePlay}
             aria-label={playing ? "Pause (k)" : "Play (k)"}
           >
             {playing ? <PauseGlyph /> : <PlayGlyph />}
+          </button>
+          <button
+            type="button"
+            className={`${s.ctrl} ${s.skip}`}
+            onClick={onNext}
+            disabled={!next}
+            aria-label={next ? `Next: ${next.title} (Shift+N)` : "No next demo"}
+            title={next ? `Next: ${next.title}` : undefined}
+          >
+            <SkipGlyph dir="next" />
           </button>
           <div className={s.volume}>
             <button
@@ -690,6 +826,21 @@ export function HlsPlayer({
           </span>
           <span className={s.spacer} />
 
+          <button
+            type="button"
+            className={`${s.ctrl} ${s.autoplay}`}
+            role="switch"
+            aria-checked={autoplay}
+            onClick={toggleAutoplay}
+            aria-label="Autoplay next demo"
+            title={autoplay ? "Autoplay is on" : "Autoplay is off"}
+          >
+            <span className={s.autoplayTrack} aria-hidden>
+              <span className={s.autoplayKnob}>
+                {autoplay ? <PlayGlyph size={9} /> : <PauseGlyph size={9} />}
+              </span>
+            </span>
+          </button>
           <MenuButton
             id="audio"
             open={menu === "audio"}
@@ -795,6 +946,125 @@ export function HlsPlayer({
       </div>
       {fullscreen && chaptersSlot}
     </div>
+  );
+}
+
+// ── Up next ────────────────────────────────────────────────────────────────
+
+/** Shown when a video ends: the next demo, with the autoplay countdown. */
+function UpNext({
+  next,
+  countdown,
+  onPlay,
+  onCancel,
+  onReplay,
+}: {
+  next: Neighbour | null;
+  countdown: number | null;
+  onPlay: () => void;
+  onCancel: () => void;
+  onReplay: () => void;
+}) {
+  const playRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => playRef.current?.focus({ preventScroll: true }), []);
+  if (!next)
+    return (
+      <div className={s.upNext} role="dialog" aria-label="End of demo">
+        <p className={s.upNextLabel}>That’s the last demo.</p>
+        <button
+          ref={playRef}
+          type="button"
+          className={s.upNextPlay}
+          onClick={onReplay}
+        >
+          Replay
+        </button>
+      </div>
+    );
+  const r = 26;
+  const frac = countdown === null ? 0 : countdown / AUTOPLAY_SECONDS;
+  return (
+    <div
+      className={s.upNext}
+      role="dialog"
+      aria-label={`Up next: ${next.title}`}
+    >
+      <p className={s.upNextLabel} aria-live="polite">
+        {countdown !== null ? `Up next in ${Math.ceil(countdown)}` : "Up next"}
+      </p>
+      <button
+        type="button"
+        className={s.upNextCard}
+        onClick={onPlay}
+        tabIndex={-1}
+      >
+        <span className={s.upNextThumb}>
+          <img src={cdn(next.thumbnail)} alt="" width={1280} height={720} />
+          <span className={s.upNextRing} aria-hidden>
+            <svg viewBox="0 0 64 64" width="64" height="64">
+              <circle cx="32" cy="32" r={r} fill="rgb(10 18 25 / 0.55)" />
+              {countdown !== null && (
+                <circle
+                  cx="32"
+                  cy="32"
+                  r={r}
+                  fill="none"
+                  stroke="#fff"
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                  strokeDasharray={2 * Math.PI * r}
+                  strokeDashoffset={2 * Math.PI * r * (1 - frac)}
+                  transform="rotate(-90 32 32)"
+                />
+              )}
+            </svg>
+            <PlayGlyph size={22} />
+          </span>
+        </span>
+        <span className={s.upNextText}>
+          <strong>{next.title}</strong>
+          <small>
+            {next.module} ·{" "}
+            <span className="px-num">{clock(next.duration)}</span>
+          </small>
+        </span>
+      </button>
+      <div className={s.upNextActions}>
+        {countdown !== null && (
+          <button type="button" className={s.upNextGhost} onClick={onCancel}>
+            Cancel
+          </button>
+        )}
+        <button type="button" className={s.upNextGhost} onClick={onReplay}>
+          Replay
+        </button>
+        <button
+          ref={playRef}
+          type="button"
+          className={s.upNextPlay}
+          onClick={onPlay}
+        >
+          Play Now
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SkipGlyph({ dir }: { dir: "prev" | "next" }) {
+  return svg(
+    20,
+    dir === "next" ? (
+      <>
+        <path d="M5 5.8v12.4a1 1 0 0 0 1.5.86l9.5-6.2a1 1 0 0 0 0-1.72L6.5 4.94A1 1 0 0 0 5 5.8Z" />
+        <rect x="17" y="5" width="2.6" height="14" rx="1" />
+      </>
+    ) : (
+      <>
+        <path d="M19 5.8v12.4a1 1 0 0 1-1.5.86L8 12.86a1 1 0 0 1 0-1.72l9.5-6.2A1 1 0 0 1 19 5.8Z" />
+        <rect x="4.4" y="5" width="2.6" height="14" rx="1" />
+      </>
+    ),
   );
 }
 
@@ -1028,9 +1298,9 @@ export function PlayGlyph({ size = 20 }: { size?: number }) {
     <path d="M7 4.8v14.4a1 1 0 0 0 1.5.86l11.9-7.2a1 1 0 0 0 0-1.72L8.5 3.94A1 1 0 0 0 7 4.8Z" />,
   );
 }
-function PauseGlyph() {
+function PauseGlyph({ size = 20 }: { size?: number } = {}) {
   return svg(
-    20,
+    size,
     <>
       <rect x="6" y="4.5" width="4" height="15" rx="1.2" />
       <rect x="14" y="4.5" width="4" height="15" rx="1.2" />

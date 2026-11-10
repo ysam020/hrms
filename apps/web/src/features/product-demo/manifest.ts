@@ -16,11 +16,11 @@ export default {
             "Create your company’s workspace in a few minutes: name it, choose your working days, start a 14-day free trial and add the contact details employees will see.",
           duration: 77.8,
           recorded: "2026-11-10",
-          thumbnail: "getting-started/org-setup/6f6b8a71ab/thumbnail.jpg",
-          hls: "getting-started/org-setup/6f6b8a71ab/master.m3u8",
+          thumbnail: "getting-started/org-setup/71dbe31c66/thumbnail.jpg",
+          hls: "getting-started/org-setup/71dbe31c66/master.m3u8",
           subtitles: {
-            en: "getting-started/org-setup/6f6b8a71ab/subtitles/en.vtt",
-            hi: "getting-started/org-setup/6f6b8a71ab/subtitles/hi.vtt",
+            en: "getting-started/org-setup/71dbe31c66/subtitles/en.vtt",
+            hi: "getting-started/org-setup/71dbe31c66/subtitles/hi.vtt",
           },
           chapters: [
             {
@@ -225,13 +225,13 @@ export default {
           title: "One Calendar for the Whole Company",
           description:
             "Company events and holidays on one shared calendar, today’s schedule beside it, and new events in a couple of clicks.",
-          duration: 33.4,
+          duration: 40.3,
           recorded: "2026-11-10",
-          thumbnail: "overview/calendar/15ff1b8f7a/thumbnail.jpg",
-          hls: "overview/calendar/15ff1b8f7a/master.m3u8",
+          thumbnail: "overview/calendar/2ec4e9e4da/thumbnail.jpg",
+          hls: "overview/calendar/2ec4e9e4da/master.m3u8",
           subtitles: {
-            en: "overview/calendar/15ff1b8f7a/subtitles/en.vtt",
-            hi: "overview/calendar/15ff1b8f7a/subtitles/hi.vtt",
+            en: "overview/calendar/2ec4e9e4da/subtitles/en.vtt",
+            hi: "overview/calendar/2ec4e9e4da/subtitles/hi.vtt",
           },
           chapters: [
             {
@@ -255,13 +255,13 @@ export default {
           title: "Team Chat",
           description:
             "Direct conversations with colleagues inside Praesto, with files, pinned messages and real-time delivery, so work talk stays at work.",
-          duration: 37,
+          duration: 37.1,
           recorded: "2026-11-10",
-          thumbnail: "overview/chat/344755c7c9/thumbnail.jpg",
-          hls: "overview/chat/344755c7c9/master.m3u8",
+          thumbnail: "overview/chat/1811974f13/thumbnail.jpg",
+          hls: "overview/chat/1811974f13/master.m3u8",
           subtitles: {
-            en: "overview/chat/344755c7c9/subtitles/en.vtt",
-            hi: "overview/chat/344755c7c9/subtitles/hi.vtt",
+            en: "overview/chat/1811974f13/subtitles/en.vtt",
+            hi: "overview/chat/1811974f13/subtitles/hi.vtt",
           },
           chapters: [
             {
@@ -336,14 +336,14 @@ export default {
           title: "Employee Directory and Profiles",
           description:
             "Every employee in one searchable directory, and a full profile for each: work details, contact, statutory numbers and the assets they hold.",
-          duration: 54.9,
+          duration: 54.8,
           recorded: "2026-11-10",
           thumbnail:
-            "employee-management/employee-directory/a5a6492512/thumbnail.jpg",
-          hls: "employee-management/employee-directory/a5a6492512/master.m3u8",
+            "employee-management/employee-directory/7dd2106d9c/thumbnail.jpg",
+          hls: "employee-management/employee-directory/7dd2106d9c/master.m3u8",
           subtitles: {
-            en: "employee-management/employee-directory/a5a6492512/subtitles/en.vtt",
-            hi: "employee-management/employee-directory/a5a6492512/subtitles/hi.vtt",
+            en: "employee-management/employee-directory/7dd2106d9c/subtitles/en.vtt",
+            hi: "employee-management/employee-directory/7dd2106d9c/subtitles/hi.vtt",
           },
           chapters: [
             {
@@ -404,11 +404,11 @@ export default {
             "Employees complete their own KYC in five guided steps; HR sees every status at a glance and reviews, approves or asks for changes.",
           duration: 58.2,
           recorded: "2026-11-10",
-          thumbnail: "employee-management/kyc/24c6237b79/thumbnail.jpg",
-          hls: "employee-management/kyc/24c6237b79/master.m3u8",
+          thumbnail: "employee-management/kyc/b3a38bce80/thumbnail.jpg",
+          hls: "employee-management/kyc/b3a38bce80/master.m3u8",
           subtitles: {
-            en: "employee-management/kyc/24c6237b79/subtitles/en.vtt",
-            hi: "employee-management/kyc/24c6237b79/subtitles/hi.vtt",
+            en: "employee-management/kyc/b3a38bce80/subtitles/en.vtt",
+            hi: "employee-management/kyc/b3a38bce80/subtitles/hi.vtt",
           },
           chapters: [
             {
@@ -434,11 +434,11 @@ export default {
             "Track laptops, phones and monitors: who has what, what’s free or in repair, returns, and issues reported by employees.",
           duration: 47.2,
           recorded: "2026-11-10",
-          thumbnail: "employee-management/assets/1e43b2d7f4/thumbnail.jpg",
-          hls: "employee-management/assets/1e43b2d7f4/master.m3u8",
+          thumbnail: "employee-management/assets/e9d320a3dd/thumbnail.jpg",
+          hls: "employee-management/assets/e9d320a3dd/master.m3u8",
           subtitles: {
-            en: "employee-management/assets/1e43b2d7f4/subtitles/en.vtt",
-            hi: "employee-management/assets/1e43b2d7f4/subtitles/hi.vtt",
+            en: "employee-management/assets/e9d320a3dd/subtitles/en.vtt",
+            hi: "employee-management/assets/e9d320a3dd/subtitles/hi.vtt",
           },
           chapters: [
             {
@@ -469,11 +469,11 @@ export default {
           duration: 46.7,
           recorded: "2026-11-10",
           thumbnail:
-            "employee-management/resignations/1861468063/thumbnail.jpg",
-          hls: "employee-management/resignations/1861468063/master.m3u8",
+            "employee-management/resignations/70bf3e3304/thumbnail.jpg",
+          hls: "employee-management/resignations/70bf3e3304/master.m3u8",
           subtitles: {
-            en: "employee-management/resignations/1861468063/subtitles/en.vtt",
-            hi: "employee-management/resignations/1861468063/subtitles/hi.vtt",
+            en: "employee-management/resignations/70bf3e3304/subtitles/en.vtt",
+            hi: "employee-management/resignations/70bf3e3304/subtitles/hi.vtt",
           },
           chapters: [
             {
@@ -544,14 +544,14 @@ export default {
           title: "Correcting Attendance",
           description:
             "HR fixes a missed or wrong punch for an employee, with the change previewed and counted against the monthly correction allowance.",
-          duration: 42.6,
+          duration: 42.5,
           recorded: "2026-11-10",
           thumbnail:
-            "attendance/attendance-correction/81491f7efd/thumbnail.jpg",
-          hls: "attendance/attendance-correction/81491f7efd/master.m3u8",
+            "attendance/attendance-correction/25513e6630/thumbnail.jpg",
+          hls: "attendance/attendance-correction/25513e6630/master.m3u8",
           subtitles: {
-            en: "attendance/attendance-correction/81491f7efd/subtitles/en.vtt",
-            hi: "attendance/attendance-correction/81491f7efd/subtitles/hi.vtt",
+            en: "attendance/attendance-correction/25513e6630/subtitles/en.vtt",
+            hi: "attendance/attendance-correction/25513e6630/subtitles/hi.vtt",
           },
           chapters: [
             {
@@ -564,15 +564,15 @@ export default {
             },
             {
               title: "The Rules",
-              startTime: 12.6,
+              startTime: 12.5,
             },
             {
               title: "Corrected Times",
-              startTime: 24.5,
+              startTime: 24.4,
             },
             {
               title: "Preview and Save",
-              startTime: 29.8,
+              startTime: 29.7,
             },
           ],
           qualities: [1080, 720, 480, 360],
@@ -617,13 +617,13 @@ export default {
           title: "Work From Home",
           description:
             "Employees request work-from-home days, managers approve in one click, and approved days count correctly in attendance.",
-          duration: 38.9,
+          duration: 38.8,
           recorded: "2026-11-10",
-          thumbnail: "attendance/wfh/eeb86741d0/thumbnail.jpg",
-          hls: "attendance/wfh/eeb86741d0/master.m3u8",
+          thumbnail: "attendance/wfh/eb34ad7832/thumbnail.jpg",
+          hls: "attendance/wfh/eb34ad7832/master.m3u8",
           subtitles: {
-            en: "attendance/wfh/eeb86741d0/subtitles/en.vtt",
-            hi: "attendance/wfh/eeb86741d0/subtitles/hi.vtt",
+            en: "attendance/wfh/eb34ad7832/subtitles/en.vtt",
+            hi: "attendance/wfh/eb34ad7832/subtitles/hi.vtt",
           },
           chapters: [
             {
@@ -732,13 +732,13 @@ export default {
           title: "Manager Approval",
           description:
             "Managers see their team’s leave requests, filter by status, check dates and reasons, and approve or reject, one at a time or in bulk.",
-          duration: 39,
+          duration: 39.4,
           recorded: "2026-11-10",
-          thumbnail: "leave-management/approve-leave/726aa8050d/thumbnail.jpg",
-          hls: "leave-management/approve-leave/726aa8050d/master.m3u8",
+          thumbnail: "leave-management/approve-leave/64adc23dfb/thumbnail.jpg",
+          hls: "leave-management/approve-leave/64adc23dfb/master.m3u8",
           subtitles: {
-            en: "leave-management/approve-leave/726aa8050d/subtitles/en.vtt",
-            hi: "leave-management/approve-leave/726aa8050d/subtitles/hi.vtt",
+            en: "leave-management/approve-leave/64adc23dfb/subtitles/en.vtt",
+            hi: "leave-management/approve-leave/64adc23dfb/subtitles/hi.vtt",
           },
           chapters: [
             {
@@ -754,12 +754,12 @@ export default {
               startTime: 19.3,
             },
             {
-              title: "Approve",
+              title: "Several at Once",
               startTime: 24.6,
             },
             {
-              title: "Several at Once",
-              startTime: 31.3,
+              title: "Approve",
+              startTime: 31.6,
             },
           ],
           qualities: [1080, 720, 480, 360],
@@ -815,11 +815,11 @@ export default {
             "Each month’s payroll moves from draft through review and approval to disbursal, with employees, gross and net totals at every step.",
           duration: 50.7,
           recorded: "2026-11-10",
-          thumbnail: "payroll/payroll-runs/16b50307ad/thumbnail.jpg",
-          hls: "payroll/payroll-runs/16b50307ad/master.m3u8",
+          thumbnail: "payroll/payroll-runs/4dbf02ccc1/thumbnail.jpg",
+          hls: "payroll/payroll-runs/4dbf02ccc1/master.m3u8",
           subtitles: {
-            en: "payroll/payroll-runs/16b50307ad/subtitles/en.vtt",
-            hi: "payroll/payroll-runs/16b50307ad/subtitles/hi.vtt",
+            en: "payroll/payroll-runs/4dbf02ccc1/subtitles/en.vtt",
+            hi: "payroll/payroll-runs/4dbf02ccc1/subtitles/hi.vtt",
           },
           chapters: [
             {
@@ -883,11 +883,11 @@ export default {
             "Define salary components, professional tax, pay cycles and income tax once; see every employee’s salary in Salary Management.",
           duration: 46.8,
           recorded: "2026-11-10",
-          thumbnail: "payroll/payroll-setup/bb424b6dd6/thumbnail.jpg",
-          hls: "payroll/payroll-setup/bb424b6dd6/master.m3u8",
+          thumbnail: "payroll/payroll-setup/f70bd84a30/thumbnail.jpg",
+          hls: "payroll/payroll-setup/f70bd84a30/master.m3u8",
           subtitles: {
-            en: "payroll/payroll-setup/bb424b6dd6/subtitles/en.vtt",
-            hi: "payroll/payroll-setup/bb424b6dd6/subtitles/hi.vtt",
+            en: "payroll/payroll-setup/f70bd84a30/subtitles/en.vtt",
+            hi: "payroll/payroll-setup/f70bd84a30/subtitles/hi.vtt",
           },
           chapters: [
             {
