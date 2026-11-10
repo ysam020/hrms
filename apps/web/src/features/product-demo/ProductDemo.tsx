@@ -16,6 +16,7 @@ import {
   CDN_CONFIGURED,
   FILM,
   MODULES,
+  ORDER,
   TOUR,
   cdn,
   chapterAt,
@@ -30,6 +31,7 @@ import {
   type Neighbour,
   type PlayerHandle,
 } from "./HlsPlayer";
+import { Thumb } from "./Thumb";
 import s from "./productDemo.module.css";
 
 /**
@@ -115,12 +117,9 @@ export default function ProductDemo() {
 
   // Every demo in catalogue order: through each module, then the next one.
   // Previous / Next and Up Next move along this list.
-  // The complete tour comes first.
+  // The complete tour, then every demo (catalogue.ts).
   const order = useMemo(
-    () => [
-      ...(TOUR && FILM ? [{ m: TOUR, v: FILM }] : []),
-      ...MODULES.flatMap((m) => m.videos.map((v) => ({ m, v }))),
-    ],
+    () => ORDER.map((x) => ({ m: x.module, v: x.video })),
     [],
   );
   const at = order.findIndex((x) => x.v.id === video.id);
@@ -552,24 +551,5 @@ export default function ProductDemo() {
       </main>
       <Footer signedIn={signedIn} home={false} />
     </div>
-  );
-}
-
-function Thumb({ video, now }: { video: DemoVideo; now?: boolean }) {
-  return (
-    <span className={s.thumbBox}>
-      {CDN_CONFIGURED && (
-        <img
-          src={cdn(video.thumbnail)}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          width={1280}
-          height={720}
-        />
-      )}
-      {now && <span className={s.nowBadge}>Now Playing</span>}
-      <span className={`${s.duration} px-num`}>{clock(video.duration)}</span>
-    </span>
   );
 }

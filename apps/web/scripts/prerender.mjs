@@ -29,8 +29,15 @@ const manifestPath = path.join(dist, ".vite/manifest.json");
 
 const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
 const template = fs.readFileSync(path.join(dist, "index.html"), "utf8");
-const { render, structuredData, PUBLIC_PAGES, SITE_URL, SITE_NAME, OG_IMAGE } =
-  await import(pathToFileURL(path.join(ssrDir, "entry.js")).href);
+const {
+  render,
+  structuredData,
+  watchPages,
+  PUBLIC_PAGES,
+  SITE_URL,
+  SITE_NAME,
+  OG_IMAGE,
+} = await import(pathToFileURL(path.join(ssrDir, "entry.js")).href);
 
 // The lazily loaded route module each page needs (see src/app/router.tsx).
 const ROUTE_MODULE = {
@@ -39,6 +46,7 @@ const ROUTE_MODULE = {
   "/terms-of-use": "src/features/public/Public.tsx",
   "/refund-policy": "src/features/public/Public.tsx",
   "/product-demo": "src/features/product-demo/ProductDemo.tsx",
+  "/watch/*": "src/features/product-demo/Watch.tsx",
 };
 
 const esc = (s) =>
@@ -70,7 +78,8 @@ function chunkAssets(key, seen = new Set()) {
  * matches the running app, where route CSS arrives after the app's.
  */
 function pageAssets(pagePath) {
-  const module = ROUTE_MODULE[pagePath];
+  const module =
+    ROUTE_MODULE[pagePath.startsWith("/watch/") ? "/watch/*" : pagePath];
   if (!manifest[module])
     throw new Error(`prerender: ${module} isn't in the build manifest`);
   const { js, css } = chunkAssets(module);
@@ -85,28 +94,36 @@ function pageAssets(pagePath) {
   ].join("\n    ");
 }
 
+const SITE_IMAGE = {
+  url: OG_IMAGE,
+  width: 1200,
+  height: 630,
+  alt: "Praesto’s Today screen: hours worked, a month of attendance and requests awaiting a decision.",
+};
+
 function head(pagePath, meta) {
   const url = `${SITE_URL}${pagePath}`;
+  const image = meta.image ?? SITE_IMAGE;
   const jsonLd = structuredData(pagePath).map(
     (d) =>
       `<script type="application/ld+json">${JSON.stringify(d).replace(/</g, "\\u003c")}</script>`,
   );
   return [
     `<link rel="canonical" href="${url}" />`,
-    `<meta property="og:type" content="website" />`,
+    `<meta property="og:type" content="${pagePath.startsWith("/watch/") ? "video.other" : "website"}" />`,
     `<meta property="og:site_name" content="${SITE_NAME}" />`,
     `<meta property="og:locale" content="en_IN" />`,
     `<meta property="og:title" content="${esc(meta.title)}" />`,
     `<meta property="og:description" content="${esc(meta.description)}" />`,
     `<meta property="og:url" content="${url}" />`,
-    `<meta property="og:image" content="${OG_IMAGE}" />`,
-    `<meta property="og:image:width" content="1200" />`,
-    `<meta property="og:image:height" content="630" />`,
-    `<meta property="og:image:alt" content="Praesto’s Today screen: hours worked, a month of attendance and requests awaiting a decision." />`,
+    `<meta property="og:image" content="${esc(image.url)}" />`,
+    `<meta property="og:image:width" content="${image.width}" />`,
+    `<meta property="og:image:height" content="${image.height}" />`,
+    `<meta property="og:image:alt" content="${esc(image.alt)}" />`,
     `<meta name="twitter:card" content="summary_large_image" />`,
     `<meta name="twitter:title" content="${esc(meta.title)}" />`,
     `<meta name="twitter:description" content="${esc(meta.description)}" />`,
-    `<meta name="twitter:image" content="${OG_IMAGE}" />`,
+    `<meta name="twitter:image" content="${esc(image.url)}" />`,
     // Another route served this file (SPA fallback, service worker shell):
     // hide the prerendered page and show the loader until the app mounts.
     // public/theme-init.js sets data-spa: the CSP allows no inline scripts.
@@ -150,15 +167,24 @@ for (const [pagePath, meta] of pages) {
   console.log(`[prerender] ${pagePath} -> dist/${file}`);
 }
 
+// A page per product video (/watch/<id> -> dist/watch/<id>.html).
+const watch = watchPages();
+fs.mkdirSync(path.join(dist, "watch"), { recursive: true });
+for (const w of watch) {
+  fs.writeFileSync(path.join(dist, `${w.path.slice(1)}.html`), page(w.path, w));
+}
+console.log(`[prerender] ${watch.length} video pages -> dist/watch/<id>.html`);
+
+const urls = [...pages.map(([p]) => p), ...watch.map((w) => w.path)];
 fs.writeFileSync(
   path.join(dist, "sitemap.xml"),
   `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${pages.map(([p]) => `  <url><loc>${SITE_URL}${p}</loc></url>`).join("\n")}
+${urls.map((p) => `  <url><loc>${SITE_URL}${p}</loc></url>`).join("\n")}
 </urlset>
 `,
 );
-console.log(`[prerender] dist/sitemap.xml (${pages.length} URLs)`);
+console.log(`[prerender] dist/sitemap.xml (${urls.length} URLs)`);
 
 // Build-only artefacts: don't deploy the manifest or the renderer.
 fs.rmSync(path.dirname(manifestPath), { recursive: true, force: true });

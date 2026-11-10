@@ -116,6 +116,9 @@ Resources:
         - Source: /product-demo
           Target: /product-demo.html
           Status: "200"
+        - Source: /watch/<id>
+          Target: /watch/<id>.html
+          Status: "200"
         - Source: </^[^.]+$|\.(?!(css|gif|ico|jpg|jpeg|js|png|txt|xml|svg|webp|wasm|woff|woff2|ttf|map|json)$)([^.]+$)/>
           Target: /index.html
           Status: "200"

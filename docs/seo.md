@@ -25,6 +25,14 @@ server. A page that arrived prerendered skips its entrance animations
 `scripts/prerender.mjs`, and add an Amplify rewrite `/<page>` → `/<page>.html`
 (below). `src/__tests__/seo.test.ts` checks every public page is a real route.
 
+**Video pages (`/watch/<id>`):** one per product video, generated from the
+demo catalogue rather than `PUBLIC_PAGES` (`watchPages()` in
+`src/prerender/entry.tsx`), written to `dist/watch/<id>.html` with the
+video's own title, description, thumbnail (`og:image`) and VideoObject, and
+listed in the sitemap. They need the `/watch/<id>` rewrite below; without
+it the SPA fallback still plays the video, but link previews show the site's
+generic card.
+
 ## Hosting rules (Amplify app `hrms-web`, console-managed)
 
 `cloudformation/amplify-deploy.yaml` holds the intended rules, but the live
@@ -59,6 +67,11 @@ app isn't managed by a stack, so they are applied by hand. Order matters
     "status": "200"
   },
   {
+    "source": "/watch/<id>",
+    "target": "/watch/<id>.html",
+    "status": "200"
+  },
+  {
     "source": "</^[^.]+$|\\.(?!(css|gif|ico|jpg|jpeg|js|png|txt|xml|svg|webp|wasm|woff|woff2|ttf|map|json)$)([^.]+$)/>",
     "target": "/index.html",
     "status": "200"
@@ -83,7 +96,7 @@ except `/` answer `301` to a trailing-slash URL and then `404`.
 After applying, check:
 
 ```sh
-for p in / /privacy-policy /terms-of-use /refund-policy /product-demo /sitemap.xml /robots.txt /dashboard; do
+for p in / /privacy-policy /terms-of-use /refund-policy /product-demo /watch/praesto-tour /sitemap.xml /robots.txt /dashboard; do
   curl -s -o /dev/null -w "%{http_code} $p\n" "https://praesto.in$p"; done   # all 200
 curl -sI https://www.praesto.in/terms-of-use | grep -i -E "^HTTP|^location"   # 301 → https://praesto.in/terms-of-use
 curl -s https://praesto.in/terms-of-use | grep -o "<h1[^>]*>[^<]*"            # the page's own H1

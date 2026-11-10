@@ -13,7 +13,7 @@ import type Hls from "hls.js";
 import type { ErrorData, Level } from "hls.js";
 import { Spinner } from "@next/ui";
 import { createRoot, type Root } from "react-dom/client";
-import { cdn, clock, type DemoVideo } from "./catalogue";
+import { cdn, clock, watchPath, type DemoVideo } from "./catalogue";
 import { documentPip, PipControls, prepareWindow } from "./PipWindow";
 import s from "./productDemo.module.css";
 
@@ -761,12 +761,12 @@ export function HlsPlayer({
   const onPrevRef = useRef(onPrev);
   onPrevRef.current = onPrev;
 
-  // Share: copy a link that opens this demo on /product-demo.
+  // Share: copy the link to this video's own page (/watch/<id>).
   const [copied, setCopied] = useState<"ok" | "fail" | null>(null);
   const copiedTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(copiedTimer.current), []);
   const share = async () => {
-    const url = `${location.origin}/product-demo?v=${encodeURIComponent(video.id)}#explore`;
+    const url = `${location.origin}${watchPath(video.id)}`;
     let ok = false;
     try {
       await navigator.clipboard.writeText(url);
