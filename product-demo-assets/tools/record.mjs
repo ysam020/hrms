@@ -13,7 +13,13 @@
 // Frames are full-resolution screenshots taken in a loop (Chromium's
 // screencast only delivers CSS-pixel frames), then laid on a constant 30 fps
 // timeline. Loading happens before the first frame, so it is never on camera.
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { execFileSync } from "node:child_process";
 import { chromium, demoContext, settle, BASE, VIEWPORT } from "./harness.mjs";
 import { EXTRA } from "./extras.mjs";
@@ -21,8 +27,22 @@ import { FLOWS } from "./flows.mjs";
 
 const ROOT = new URL("../", import.meta.url).pathname;
 const FPS = 30;
-/** Dwell multiplier for rec.wait: time to read each subtitle and see the result. */
-const PACE = Number(process.env.PACE || 1.35);
+/** Dwell multiplier for rec.wait. The narration sets the pace (below). */
+const PACE = Number(process.env.PACE || 1);
+/** Silence between one narrated line and the next. */
+const BREATH = 0.45;
+
+// Narration clips and their durations (narrate.mjs). A cue's next line can't
+// start until the longer of its English and Hindi narration has finished.
+const NARRATION = existsSync(`${ROOT}narration.json`)
+  ? JSON.parse(readFileSync(`${ROOT}narration.json`, "utf8")).cues
+  : null;
+function voiceFor(en) {
+  const v = NARRATION?.[en];
+  if (!v)
+    throw new Error(`no narration for "${en}": run tools/narrate.mjs first`);
+  return v;
+}
 
 /** A visible pointer and click ripple; headless screenshots have no cursor. */
 function cursorOverlay() {
@@ -33,29 +53,51 @@ function cursorOverlay() {
     c.innerHTML =
       '<svg width="26" height="26" viewBox="0 0 24 24"><path d="M4 2.5v17.2l4.6-4.4 2.9 6.6 2.9-1.3-2.9-6.5h6.4z" fill="#111" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/></svg>';
     Object.assign(c.style, {
-      position: "fixed", left: "0", top: "0", zIndex: "2147483647",
-      pointerEvents: "none", transform: "translate(-200px,-200px)",
+      position: "fixed",
+      left: "0",
+      top: "0",
+      zIndex: "2147483647",
+      pointerEvents: "none",
+      transform: "translate(-200px,-200px)",
       filter: "drop-shadow(0 2px 3px rgb(0 0 0 / .3))",
     });
     document.documentElement.appendChild(c);
-    addEventListener("mousemove", (e) => {
-      c.style.transform = `translate(${e.clientX - 4}px,${e.clientY - 2}px)`;
-    }, true);
-    addEventListener("mousedown", (e) => {
-      const r = document.createElement("div");
-      Object.assign(r.style, {
-        position: "fixed", left: `${e.clientX - 18}px`, top: `${e.clientY - 18}px`,
-        width: "36px", height: "36px", borderRadius: "50%",
-        background: "rgb(38 110 198 / .28)", border: "2px solid rgb(38 110 198 / .6)",
-        zIndex: "2147483646", pointerEvents: "none",
-        transition: "transform 420ms ease-out, opacity 420ms ease-out",
-      });
-      document.documentElement.appendChild(r);
-      requestAnimationFrame(() => { r.style.transform = "scale(1.6)"; r.style.opacity = "0"; });
-      setTimeout(() => r.remove(), 500);
-    }, true);
+    addEventListener(
+      "mousemove",
+      (e) => {
+        c.style.transform = `translate(${e.clientX - 4}px,${e.clientY - 2}px)`;
+      },
+      true,
+    );
+    addEventListener(
+      "mousedown",
+      (e) => {
+        const r = document.createElement("div");
+        Object.assign(r.style, {
+          position: "fixed",
+          left: `${e.clientX - 18}px`,
+          top: `${e.clientY - 18}px`,
+          width: "36px",
+          height: "36px",
+          borderRadius: "50%",
+          background: "rgb(38 110 198 / .28)",
+          border: "2px solid rgb(38 110 198 / .6)",
+          zIndex: "2147483646",
+          pointerEvents: "none",
+          transition: "transform 420ms ease-out, opacity 420ms ease-out",
+        });
+        document.documentElement.appendChild(r);
+        requestAnimationFrame(() => {
+          r.style.transform = "scale(1.6)";
+          r.style.opacity = "0";
+        });
+        setTimeout(() => r.remove(), 500);
+      },
+      true,
+    );
   };
-  if (document.readyState === "loading") addEventListener("DOMContentLoaded", install);
+  if (document.readyState === "loading")
+    addEventListener("DOMContentLoaded", install);
   else install();
 }
 
@@ -81,13 +123,28 @@ async function record(browser, id, flow) {
   const frames = [];
   const chapters = [];
   const cues = [];
+  /** Wait until the last narrated line (both languages) has been spoken. */
+  const pace = async () => {
+    const last = cues.at(-1);
+    if (!last) return;
+    const need =
+      Math.max(last.voice.en.duration, last.voice.hi.duration) + BREATH;
+    const left = last.start + need - now();
+    if (left > 0) await page.waitForTimeout(left * 1000);
+  };
   const start = Date.now();
   const now = () => (Date.now() - start) / 1000;
   let recording = true;
   const capture = (async () => {
     while (recording) {
       const t = now();
-      const jpg = await page.screenshot({ type: "jpeg", quality: 90, animations: "allow", caret: "initial", scale: "device" });
+      const jpg = await page.screenshot({
+        type: "jpeg",
+        quality: 90,
+        animations: "allow",
+        caret: "initial",
+        scale: "device",
+      });
       const file = `${String(frames.length).padStart(5, "0")}.jpg`;
       writeFileSync(tmp + file, jpg);
       frames.push({ t, file });
@@ -96,12 +153,15 @@ async function record(browser, id, flow) {
 
   const rec = {
     page,
-    chapter(title) {
+    async chapter(title) {
+      await pace();
       chapters.push({ title, startTime: Math.round(now() * 10) / 10 });
     },
     /** A subtitle cue: shows from now until the next cue (or `hold` s). */
-    say(en, hi, hold) {
-      cues.push({ start: now(), en, hi, hold });
+    async say(en, hi, hold) {
+      const voice = voiceFor(en);
+      await pace();
+      cues.push({ start: now(), en, hi, hold, voice });
     },
     async wait(ms) {
       await page.waitForTimeout(ms * PACE);
@@ -113,7 +173,10 @@ async function record(browser, id, flow) {
       for (let i = 1; i <= steps; i++) {
         const k = i / steps;
         const e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
-        await page.mouse.move(from.x + (x - from.x) * e, from.y + (y - from.y) * e);
+        await page.mouse.move(
+          from.x + (x - from.x) * e,
+          from.y + (y - from.y) * e,
+        );
         await page.waitForTimeout(ms / steps);
       }
       pos = { x, y };
@@ -151,7 +214,8 @@ async function record(browser, id, flow) {
   let failure = null;
   try {
     await flow.run(rec);
-    await page.waitForTimeout(flow.tail ?? 1800);
+    await pace();
+    await page.waitForTimeout(flow.tail ?? 1200);
   } catch (e) {
     failure = e;
   }
@@ -174,35 +238,72 @@ async function record(browser, id, flow) {
     seq.map((f) => `file '${tmp}${f}'\nduration ${1 / FPS}`).join("\n"),
   );
   execFileSync("ffmpeg", [
-    "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", `${tmp}concat.txt`,
-    "-vf", "scale=1920:1080:flags=lanczos:in_range=full:out_range=tv,format=yuv420p",
-    "-color_range", "tv", "-r", String(FPS),
-    "-c:v", "libx264", "-preset", "slow", "-crf", "14", "-tune", "animation",
+    "-y",
+    "-loglevel",
+    "error",
+    "-f",
+    "concat",
+    "-safe",
+    "0",
+    "-i",
+    `${tmp}concat.txt`,
+    "-vf",
+    "scale=1920:1080:flags=lanczos:in_range=full:out_range=tv,format=yuv420p",
+    "-color_range",
+    "tv",
+    "-r",
+    String(FPS),
+    "-c:v",
+    "libx264",
+    "-preset",
+    "slow",
+    "-crf",
+    "14",
+    "-tune",
+    "animation",
     `${dir}source.mp4`,
   ]);
 
   // Cues run until the next one starts (minus a short gap), or for `hold`.
   const timedCues = cues.map((c, i) => {
     const next = cues[i + 1]?.start ?? duration;
-    const endAt = c.hold ? Math.min(c.start + c.hold, next - 0.15) : next - 0.15;
-    return { start: Math.round(c.start * 100) / 100, end: Math.round(Math.min(endAt, duration - 0.05) * 100) / 100, en: c.en, hi: c.hi };
+    const endAt = c.hold
+      ? Math.min(c.start + c.hold, next - 0.15)
+      : next - 0.15;
+    return {
+      start: Math.round(c.start * 100) / 100,
+      end: Math.round(Math.min(endAt, duration - 0.05) * 100) / 100,
+      en: c.en,
+      hi: c.hi,
+      voice: { en: c.voice.en, hi: c.voice.hi },
+    };
   });
   if (chapters[0]) chapters[0].startTime = 0;
   writeFileSync(
     `${dir}timeline.json`,
-    JSON.stringify({
-      id, module: flow.module, title: flow.title, description: flow.description,
-      duration: Math.round(duration * 10) / 10,
-      captureFps: Math.round((frames.length / end) * 10) / 10,
-      chapters, cues: timedCues,
-      // Writes the flow made; all were answered by fixtures in the browser.
-      fixtureWrites: posted.filter((p) => !/refresh-token|csrf/.test(p)),
-      pageErrors: errors,
-      recordedAt: new Date().toISOString(),
-    }, null, 2),
+    JSON.stringify(
+      {
+        id,
+        module: flow.module,
+        title: flow.title,
+        description: flow.description,
+        duration: Math.round(duration * 10) / 10,
+        captureFps: Math.round((frames.length / end) * 10) / 10,
+        chapters,
+        cues: timedCues,
+        // Writes the flow made; all were answered by fixtures in the browser.
+        fixtureWrites: posted.filter((p) => !/refresh-token|csrf/.test(p)),
+        pageErrors: errors,
+        recordedAt: new Date().toISOString(),
+      },
+      null,
+      2,
+    ),
   );
   rmSync(tmp, { recursive: true, force: true });
-  console.log(`✓ ${id}: ${duration.toFixed(1)} s, ${(frames.length / end).toFixed(1)} fps captured, ${chapters.length} chapters, ${cues.length} cues${errors.length ? `, ${errors.length} page errors` : ""}`);
+  console.log(
+    `✓ ${id}: ${duration.toFixed(1)} s, ${(frames.length / end).toFixed(1)} fps captured, ${chapters.length} chapters, ${cues.length} cues${errors.length ? `, ${errors.length} page errors` : ""}`,
+  );
 }
 
 const only = process.argv.slice(2);

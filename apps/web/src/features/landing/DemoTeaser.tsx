@@ -57,8 +57,8 @@ export function DemoTeaser() {
           See them in action.
         </h2>
         <p className={s.lead}>
-          Short recordings of the real product, module by module, with English
-          or Hindi subtitles. No sign-up needed.
+          Short recordings of the real product, module by module, narrated in
+          English or Hindi. No sign-up needed.
         </p>
       </Reveal>
 

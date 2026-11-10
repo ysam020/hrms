@@ -9,13 +9,14 @@ output it generates are git-ignored and live in S3.
 
 ## How a video is made
 
-| Step               | Command                                               | Output                                                                                       |
-| ------------------ | ----------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| 1. Run the web app | `cd apps/web && npx vite --port 5199`                 |                                                                                              |
-| 2. Record          | `node product-demo-assets/tools/record.mjs [id …]`    | `<module>/<id>/source.mp4`, `timeline.json`                                                  |
-| 3. Encode          | `node product-demo-assets/tools/build-hls.mjs [id …]` | HLS, subtitles, thumbnail, `manifest.json`, `apps/web/src/features/product-demo/manifest.ts` |
-| 4. Validate        | `node product-demo-assets/tools/validate-hls.mjs`     | `validation.json` (exits 1 on any failure)                                                   |
-| 5. Upload          | `node product-demo-assets/tools/upload.mjs`           | `s3://praesto-product-demo-<account>/product-demo/…`                                         |
+| Step               | Command                                               | Output                                                                                                             |
+| ------------------ | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| 1. Run the web app | `cd apps/web && npx vite --port 5199`                 |                                                                                                                    |
+| 2. Narrate         | `node product-demo-assets/tools/narrate.mjs`          | `.narration/<lang>/*.mp3`, `narration.json` (clip durations)                                                       |
+| 3. Record          | `node product-demo-assets/tools/record.mjs [id …]`    | `<module>/<id>/source.mp4`, `timeline.json`                                                                        |
+| 4. Encode          | `node product-demo-assets/tools/build-hls.mjs [id …]` | HLS with narration tracks, subtitles, thumbnail, `manifest.json`, `apps/web/src/features/product-demo/manifest.ts` |
+| 5. Validate        | `node product-demo-assets/tools/validate-hls.mjs`     | `validation.json` (exits 1 on any failure)                                                                         |
+| 6. Upload          | `node product-demo-assets/tools/upload.mjs`           | `s3://praesto-product-demo-<account>/product-demo/…`                                                               |
 
 Helpers for writing flows: `survey.mjs <path…>` screenshots screens with the
 fixtures, `probe.mjs <path…>` lists API calls the fixtures don't answer, and
@@ -45,6 +46,25 @@ testing before the CDN exists.
   35–39 fps captured), laid on a constant 30 fps timeline, then encoded as an
   H.264 CRF 14 mezzanine.
 
+### Narration (`tools/narrate.mjs`, `tools/glossary.mjs`)
+
+- Every cue is spoken in both languages by Amazon Polly's generative voice
+  **Kiara** (Indian English and Hindi), on the existing AWS account. Clips
+  are cached by voice, language and text, so only changed lines are
+  re-synthesised.
+- The English narration reads the English subtitle. "Praesto" is respelled
+  "Praysto" so it's said PRAY-stoh.
+- The Hindi narration reads the Hindi subtitle with each English term
+  written in Devanagari for the narrator (`glossary.mjs`: "Today" → "टुडे",
+  "Approve" → "अप्रूव", "Praesto" → "प्रेस्टो"). The subtitles themselves
+  keep the English terms. Read as Latin script, the voice mispronounced them
+  (speech-to-text heard "Today" as "तोड़े"). An English word missing from
+  the glossary stops `narrate.mjs`.
+- **Paced to the speech:** in `record.mjs`, `rec.say()` and `rec.chapter()`
+  wait until the previous line has been spoken in _both_ languages (the
+  longer one, plus 0.45 s). The UI keeps moving while the narrator talks,
+  and neither language is ever cut off.
+
 ### Encoding (`tools/build-hls.mjs`)
 
 One ffmpeg pass per video, split into renditions (never upscaled):
@@ -64,8 +84,12 @@ One ffmpeg pass per video, split into renditions (never upscaled):
 - HLS v7 VOD with fMP4/CMAF segments (`init.mp4` plus `segment_NNN.m4s`) of
   4 s. The master has `INDEPENDENT-SEGMENTS`, `BANDWIDTH`, `CODECS`,
   `RESOLUTION` and `FRAME-RATE`.
-- No audio track. The demos are silent screen recordings, and the
-  subtitles carry the words.
+- Two narration tracks as HLS alternate audio renditions in one group
+  (`EXT-X-MEDIA TYPE=AUDIO`, English default, Hindi; `AUTOSELECT=YES`).
+  Each is the cue clips placed at their cue times, loudness-normalised to
+  −16 LUFS (−1.5 dBTP), AAC-LC mono 96 kb/s at 48 kHz, in 4 s fMP4
+  segments. Every video variant references the group, and its `CODECS`
+  includes `mp4a.40.2`.
 - WebVTT subtitles: `subtitles/en.vtt` and `subtitles/hi.vtt`, with
   identical cue timings.
 - A 1280×720 `thumbnail.jpg`, taken 1.5 s into the second chapter.

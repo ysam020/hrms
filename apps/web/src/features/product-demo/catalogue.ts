@@ -22,6 +22,8 @@ export type DemoVideo = {
   chapters: Chapter[];
   /** Heights in the master playlist, for the catalogue only. */
   qualities: number[];
+  /** Narration languages (HLS audio renditions). */
+  audio?: string[];
 };
 export type DemoModule = {
   id: string;
