@@ -38,7 +38,7 @@ export default function LegalPageLayout({
       <footer className={s.legalFooter}>
         <nav aria-label="Site">
           <Link to="/">Praesto home</Link>
-          <a href="/#pricing">Pricing</a>
+          <a href="/pricing">Pricing</a>
           <a href="mailto:support@praesto.in">support@praesto.in</a>
         </nav>
       </footer>

@@ -163,12 +163,7 @@ export default function ProductDemo() {
       <a className={landing.skip} href="#explore">
         Skip to demos
       </a>
-      <NavBar
-        tone={overDark ? "dark" : "light"}
-        user={user}
-        current="demos"
-        home={false}
-      />
+      <NavBar tone={overDark ? "dark" : "light"} user={user} current="demos" />
 
       <main id="main">
         {/* ── Hero ── */}
@@ -550,7 +545,7 @@ export default function ProductDemo() {
           </div>
         </section>
       </main>
-      <Footer signedIn={signedIn} home={false} />
+      <Footer signedIn={signedIn} />
     </div>
   );
 }

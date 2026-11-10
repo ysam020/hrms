@@ -1,5 +1,5 @@
 import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { UserContext } from "@web/app/providers/UserContext";
 import { Avatar, Icon, Menu } from "@next/ui";
@@ -10,8 +10,8 @@ import s from "./landing.module.css";
 
 // The public site's shared chrome: the navigation bar, the footer and the
 // rolling call-to-action label. The landing page uses them as they are;
-// other public pages (/product-demo) pass home={false}, so the section links
-// lead back to the landing page's sections.
+// other public pages use them too. The section links lead to each section's
+// own page (/features, /platform, /modules, /product-demo, /pricing).
 
 /** A signed-in person's display name. */
 function nameOf(user: any): string {
@@ -57,34 +57,27 @@ export function Arrow() {
 
 // ── Navigation ─────────────────────────────────────────────────────────────
 
+/** Each section of the site has its own page (Pages.tsx, /product-demo). */
 const NAV_LINKS = [
-  { href: "#features", label: "Features", key: "features" },
-  { href: "#platform", label: "Platform", key: "platform" },
-  { href: "#modules", label: "Modules", key: "modules" },
-  { href: "#demos", label: "Demos", key: "demos" },
-  { href: "#pricing", label: "Pricing", key: "pricing" },
+  { href: "/features", label: "Features", key: "features" },
+  { href: "/platform", label: "Platform", key: "platform" },
+  { href: "/modules", label: "Modules", key: "modules" },
+  { href: "/product-demo", label: "Demos", key: "demos" },
+  { href: "/pricing", label: "Pricing", key: "pricing" },
 ];
-
-/** A nav link's target: the section here, or the right page elsewhere. */
-function linkFor(hash: string, home: boolean) {
-  if (home) return hash;
-  return hash === "#demos" ? "/product-demo" : `/${hash}`;
-}
 
 export function NavBar({
   tone,
   user,
   current,
-  home = true,
 }: {
   tone: "dark" | "light";
   user: any;
-  /** On the landing page itself; elsewhere section links go to "/#…". */
-  home?: boolean;
   /** The section under the bar, if it has a link. */
   current: string | null;
 }) {
   const [open, setOpen] = useState(false);
+  const { pathname } = useLocation();
   const menuRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
 
@@ -132,10 +125,13 @@ export function NavBar({
         </Link>
         <nav aria-label="Primary" className={s.navLinks}>
           {NAV_LINKS.map((l) => (
-            <a
+            <Link
               key={l.href}
-              href={linkFor(l.href, home)}
-              aria-current={current === l.key ? "location" : undefined}
+              to={l.href}
+              // The mark follows the section in view (on the landing page) or
+              // the page; only the page you're on is announced as current.
+              data-current={current === l.key || undefined}
+              aria-current={pathname === l.href ? "page" : undefined}
             >
               {l.label}
               {/* One mark that slides between links as the page scrolls. */}
@@ -146,7 +142,7 @@ export function NavBar({
                   transition={{ duration: dur.state, ease: ease.state }}
                 />
               )}
-            </a>
+            </Link>
           ))}
         </nav>
         <div className={s.navActions}>
@@ -203,14 +199,11 @@ export function NavBar({
               variants={menuVariants}
             >
               {NAV_LINKS.map((l) => (
-                <motion.a
-                  key={l.href}
-                  href={linkFor(l.href, home)}
-                  variants={menuItem}
-                  onClick={() => setOpen(false)}
-                >
-                  {l.label}
-                </motion.a>
+                <motion.div key={l.href} variants={menuItem}>
+                  <Link to={l.href} onClick={() => setOpen(false)}>
+                    {l.label}
+                  </Link>
+                </motion.div>
               ))}
               <motion.span variants={menuItem} className={s.menuLast}>
                 {user ? (
@@ -323,14 +316,7 @@ const menuItem: Variants = {
 
 // ── Footer ─────────────────────────────────────────────────────────────────
 
-export function Footer({
-  signedIn,
-  home = true,
-}: {
-  signedIn: boolean;
-  home?: boolean;
-}) {
-  const at = (hash: string) => (home ? hash : `/${hash}`);
+export function Footer({ signedIn }: { signedIn: boolean }) {
   return (
     <footer className={s.footer}>
       <div className={s.footerInner}>
@@ -342,14 +328,14 @@ export function Footer({
         </div>
         <nav aria-label="Product" className={s.footerCol}>
           <p className={s.footerHead}>Product</p>
-          <a href={at("#features")}>Features</a>
-          <a href={at("#how-it-works")}>How It Works</a>
-          <a href={at("#attendance-rules")}>Attendance</a>
-          <a href={at("#permissions")}>Permissions</a>
-          <a href={at("#reports")}>Reports</a>
-          <a href={at("#modules")}>Modules</a>
-          <a href={at("#security")}>Security</a>
-          <a href={at("#pricing")}>Pricing</a>
+          <Link to="/features">Features</Link>
+          <Link to="/features#how-it-works">How It Works</Link>
+          <Link to="/platform#attendance-rules">Attendance</Link>
+          <Link to="/platform#permissions">Permissions</Link>
+          <Link to="/platform#reports">Reports</Link>
+          <Link to="/modules">Modules</Link>
+          <Link to="/security">Security</Link>
+          <Link to="/pricing">Pricing</Link>
           <Link to="/product-demo">Product Demo</Link>
         </nav>
         <nav aria-label="Account" className={s.footerCol}>

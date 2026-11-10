@@ -64,7 +64,7 @@ export default function Watch() {
       {typeof document !== "undefined" && (
         <title>{`${video.title} · Praesto`}</title>
       )}
-      <NavBar tone="light" user={user} current="demos" home={false} />
+      <NavBar tone="light" user={user} current="demos" />
 
       <main id="main" className={w.main}>
         <div className={s.wrap}>
@@ -214,7 +214,7 @@ export default function Watch() {
           </div>
         </div>
       </main>
-      <Footer signedIn={signedIn} home={false} />
+      <Footer signedIn={signedIn} />
     </div>
   );
 }

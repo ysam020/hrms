@@ -339,7 +339,7 @@
   border-radius: 1px;
   background: currentColor;
 }
-.navLinks a[aria-current] {
+.navLinks a[data-current] {
   opacity: 1;
 }
 .navLinks a,
@@ -394,6 +394,7 @@
     0 18px 40px -12px rgb(0 0 0 / 0.3);
 }
 .menu a {
+  display: block;
   padding: 12px 14px;
   border-radius: 10px;
   color: inherit;
