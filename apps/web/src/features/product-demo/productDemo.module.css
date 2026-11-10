@@ -550,6 +550,7 @@
 .player {
   --pd-stage: #0a1219;
   position: relative;
+  container: player / inline-size;
   border-radius: 16px;
   overflow: hidden;
   background: var(--pd-stage);
@@ -756,7 +757,26 @@
 .spacer {
   flex: 1;
 }
-@media (max-width: 560px) {
+/* Narrower players (a side-by-side layout, a small laptop): drop the volume
+   slider, then the total time, so the row never runs past the edge. */
+@container player (max-width: 900px) {
+  .volumeSlider {
+    display: none;
+  }
+  .ctrl {
+    min-width: 40px;
+    padding: 0 6px;
+  }
+}
+@container player (max-width: 740px) {
+  .timeTotal {
+    display: none;
+  }
+  .ctrlVoice svg {
+    display: none;
+  }
+}
+@container player (max-width: 560px) {
   .volumeSlider {
     display: none;
   }
@@ -1042,7 +1062,7 @@
   outline: 2px solid var(--landing-focus);
   outline-offset: 2px;
 }
-@media (max-width: 560px) {
+@container player (max-width: 560px) {
   .upNext {
     gap: 8px;
   }
@@ -1095,7 +1115,7 @@
 .autoplay[aria-checked="true"] .autoplayKnob {
   transform: translateX(18px);
 }
-@media (max-width: 560px) {
+@container player (max-width: 560px) {
   /* Phones keep Next; Previous and the switch are in the panel's reach. */
   .skip:first-child,
   .autoplay {
@@ -1109,7 +1129,7 @@
   }
 }
 
-@media (max-width: 420px) {
+@container player (max-width: 420px) {
   /* Narrow phones: eight controls in one row. */
   .ctrl {
     min-width: 36px;
@@ -1117,9 +1137,245 @@
   }
 }
 
-@media (max-width: 560px) {
+@container player (max-width: 560px) {
   /* Phones: picture in picture is in the browser's own controls. */
   .pip {
     display: none;
+  }
+}
+
+/* ── Picture in picture ──────────────────────────────────────────────── */
+/* In the page, while the video plays in its own window. */
+.pipPlaceholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 50% 40%, rgb(38 110 198 / 0.22), transparent 60%),
+    var(--pd-stage);
+  color: rgb(255 255 255 / 0.85);
+  text-align: center;
+}
+.pipPlaceholder svg {
+  width: 40px;
+  height: 40px;
+  color: #9cc1ee;
+}
+.pipPlaceholder p {
+  margin: 0;
+  font: 500 16px/1.4 var(--px-font);
+}
+
+/* The window itself (Document Picture-in-Picture). */
+.pipBody {
+  margin: 0;
+  overflow: hidden;
+  background: #000;
+  color: #fff;
+  font-family: var(--px-font, system-ui, sans-serif);
+}
+.pipFrame {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  background: #000;
+}
+.pipFrame video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.pipUi {
+  position: fixed;
+  inset: 0;
+}
+.pipHit {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.pipTop,
+.pipCentre,
+.pipBottom,
+.pipNext {
+  position: absolute;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+.pipBody:hover .pipTop,
+.pipBody:hover .pipCentre,
+.pipBody:hover .pipBottom,
+.pipUi:focus-within .pipTop,
+.pipUi:focus-within .pipCentre,
+.pipUi:focus-within .pipBottom,
+.pipUi[data-paused] .pipTop,
+.pipUi[data-paused] .pipCentre,
+.pipUi[data-paused] .pipBottom,
+.pipUi[data-ended] .pipNext {
+  opacity: 1;
+}
+.pipTop {
+  inset: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 18px 14px;
+  background: linear-gradient(rgb(0 0 0 / 0.7), transparent);
+}
+.pipTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font: 600 14px/1.3 var(--px-font, system-ui);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.pipCentre {
+  left: 50%;
+  top: 50%;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  transform: translate(-50%, -50%);
+}
+.pipBtn {
+  display: inline-grid;
+  place-items: center;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.35);
+  color: #fff;
+  cursor: pointer;
+}
+.pipBtn:hover {
+  background: rgb(255 255 255 / 0.18);
+}
+.pipBtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.pipPlay {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--l-accent, #266ec6);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 0 0 8px rgb(38 110 198 / 0.25);
+}
+.pipBtn:focus-visible,
+.pipPlay:focus-visible {
+  outline: 2px solid #9cc1ee;
+  outline-offset: 2px;
+}
+.pipNext {
+  left: 50%;
+  top: calc(50% + 44px);
+  margin: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.6);
+  font: 500 13px/1.3 var(--px-font, system-ui);
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+.pipBottom {
+  inset: auto 0 0;
+  padding: 18px 10px 6px;
+  background: linear-gradient(transparent, rgb(0 0 0 / 0.75));
+}
+.pipProgress {
+  position: relative;
+  height: 14px;
+  cursor: pointer;
+  touch-action: none;
+}
+.pipProgress::before,
+.pipProgress span {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 5px;
+  height: 4px;
+  border-radius: 999px;
+}
+.pipProgress::before {
+  right: 0;
+  background: rgb(255 255 255 / 0.3);
+}
+.pipProgress span {
+  background: #4a8fe0;
+}
+.pipRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.pipTime {
+  padding-left: 4px;
+  font: 500 13px/1 var(--px-font, system-ui);
+  font-variant-numeric: tabular-nums;
+}
+.pipCc {
+  padding: 1px 4px;
+  border: 1.5px solid currentColor;
+  border-radius: 4px;
+  font: 700 10px/1.2 var(--px-font, system-ui);
+  opacity: 0.6;
+}
+.pipCc[data-on] {
+  opacity: 1;
+}
+.pipCue {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  z-index: 0;
+  width: max-content;
+  max-width: 92%;
+  text-align: center;
+  pointer-events: none;
+  transform: translateX(-50%);
+  transition: bottom 200ms ease;
+}
+.pipBody:hover .pipCue,
+.pipUi[data-paused] .pipCue {
+  bottom: 58px;
+}
+/* A small window: while the controls show, they come first. */
+@media (max-height: 340px) {
+  .pipBody:hover .pipCue,
+  .pipUi[data-paused] .pipCue {
+    opacity: 0;
+  }
+}
+.pipCue span {
+  padding: 0.15em 0.45em;
+  border-radius: 5px;
+  background: rgb(0 0 0 / 0.8);
+  font: 500 clamp(11px, 2.9vw, 22px) / 1.45 var(--px-font, system-ui);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pipTop,
+  .pipCentre,
+  .pipBottom,
+  .pipNext,
+  .pipCue {
+    transition: none;
   }
 }
