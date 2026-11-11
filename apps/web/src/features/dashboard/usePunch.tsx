@@ -7,6 +7,7 @@ import { useVideoCallback } from "@web/shared/hooks/useVideoCallback";
 import { useStepMessage } from "@web/shared/hooks/useStepMessage";
 import { addAttendance } from "@web/shared/utils/addAttendance";
 import { Button, Dialog, Spinner } from "@next/ui";
+import { usePermissionPrimer, DEFAULT_COPY } from "@next/ui/permissionPrimer";
 import { Presence } from "@next/motion";
 
 type Field = "timeIn" | "timeOut";
@@ -27,7 +28,7 @@ export function usePunch(refresh: () => void) {
   );
   const { getStepMessage } = useStepMessage();
   const process = useAttendanceProcess(face, refresh);
-  const [cameraPrompt, setCameraPrompt] = useState(false);
+  const { ask, primer } = usePermissionPrimer();
   const [preparing, setPreparing] = useState(false);
   const pending = useRef<Field | null>(null);
   const modelsReady = useRef(false);
@@ -62,28 +63,13 @@ export function usePunch(refresh: () => void) {
       // load, instead of after them. Nothing is downloaded until needed.
       if (!modelsReady.current)
         preconnect("https://cdn.jsdelivr.net", { crossOrigin: "anonymous" });
-      try {
-        const status = await navigator.permissions.query({
-          name: "camera" as PermissionName,
-        });
-        if (status.state !== "granted") {
-          setCameraPrompt(true);
-          return;
-        }
-      } catch {
-        setCameraPrompt(true);
-        return;
-      }
+      // Explains the face check before the browser's camera prompt, or how
+      // to unblock the camera; resolves at once if it's already allowed.
+      if (!(await ask("camera"))) return;
       if (await loadModels()) process.processAttendance(field);
     },
-    [loadModels, process],
+    [ask, loadModels, process],
   );
-
-  const allowCamera = async () => {
-    setCameraPrompt(false);
-    if (pending.current && (await loadModels()))
-      process.processAttendance(pending.current);
-  };
 
   const allowLocation = () => {
     navigator.geolocation.getCurrentPosition(
@@ -114,22 +100,7 @@ export function usePunch(refresh: () => void) {
   const step = face.faceRecognitionState.step;
   const dialogs = (
     <>
-      <Dialog
-        open={cameraPrompt}
-        onClose={() => setCameraPrompt(false)}
-        title="Verify It’s You"
-        description="Praesto uses your camera for a quick face check when you punch in or out. The image is compared on this device and isn’t stored."
-        size="sm"
-        icon={{ name: "person", tone: "accent" }}
-        footer={
-          <>
-            <Button onClick={() => setCameraPrompt(false)}>Not Now</Button>
-            <Button variant="primary" onClick={allowCamera} data-autofocus>
-              Continue
-            </Button>
-          </>
-        }
-      />
+      {primer}
       <Dialog
         open={process.dialogOpen}
         onClose={() => {}}
@@ -190,8 +161,8 @@ export function usePunch(refresh: () => void) {
       <Dialog
         open={process.showConsentDrawer}
         onClose={() => process.setShowConsentDrawer(false)}
-        title="Share Your Location"
-        description="Attendance is recorded with your location so your organisation can confirm where you worked from."
+        title={DEFAULT_COPY.geolocation.title}
+        description={DEFAULT_COPY.geolocation.reason}
         size="sm"
         icon={{ name: "pin", tone: "accent" }}
         footer={
@@ -204,7 +175,16 @@ export function usePunch(refresh: () => void) {
             </Button>
           </>
         }
-      />
+      >
+        <ul
+          className="px-secondary"
+          style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 6 }}
+        >
+          {DEFAULT_COPY.geolocation.points?.map((s) => (
+            <li key={s}>{s}</li>
+          ))}
+        </ul>
+      </Dialog>
     </>
   );
 

@@ -135,7 +135,13 @@ export async function performWebAuthnLogin(
         longitude: null,
       };
       try {
-        if (navigator.geolocation) {
+        // Optional, so never prompt for it mid sign-in with no explanation:
+        // use it only when the person has already allowed location.
+        const allowed = await navigator.permissions
+          ?.query({ name: "geolocation" })
+          .then((s) => s.state === "granted")
+          .catch(() => false);
+        if (navigator.geolocation && allowed) {
           const position = await new Promise<GeolocationPosition>(
             (resolve, reject) => {
               navigator.geolocation.getCurrentPosition(resolve, reject, {

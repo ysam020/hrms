@@ -29,6 +29,7 @@ import { useGet } from "@next/lib/hooks";
 import { MyStatusButton } from "@next/features/presence/StatusPicker";
 import { fmtDate, fmtDateTime, fromNow, readableCase } from "@next/lib/format";
 import type { IconName } from "@next/ui/Icon";
+import { usePermissionPrimer } from "@next/ui/permissionPrimer";
 import { EmployeeIdentity } from "../employees/EmployeeIdentity";
 import s from "./profile.module.css";
 
@@ -285,6 +286,7 @@ function PushDevices() {
   const [mine, setMine] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [remove, setRemove] = useState<any | "all" | null>(null);
+  const { ask, primer } = usePermissionPrimer();
   // Why turning on failed, kept on the page (a toast is gone too soon for
   // steps like Brave's push setting).
   const [problem, setProblem] = useState<string | null>(null);
@@ -312,8 +314,10 @@ function PushDevices() {
 
   const enabledHere = tokens.some((t) => t.deviceFingerprint === mine);
   const enable = async () => {
-    setBusy(true);
     setProblem(null);
+    // Say why before the browser's prompt (or how to unblock it).
+    if (!(await ask("notifications"))) return;
+    setBusy(true);
     try {
       const token = await generateToken((a: any) => {
         if (a?.severity === "error" || a?.severity === "warning")
@@ -417,12 +421,18 @@ function PushDevices() {
           <span className="px-headline">{here.title}</span>
           <span className="px-meta">{here.text}</span>
         </div>
-        {supported && !enabledHere && permission !== "denied" && (
-          <Button variant="primary" icon="bell" busy={busy} onClick={enable}>
-            Turn On
+        {supported && !enabledHere && (
+          <Button
+            variant={permission === "denied" ? "secondary" : "primary"}
+            icon="bell"
+            busy={busy}
+            onClick={enable}
+          >
+            {permission === "denied" ? "How to Allow" : "Turn On"}
           </Button>
         )}
       </Card>
+      {primer}
       {problem && (
         <Banner
           tone="danger"
