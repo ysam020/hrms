@@ -214,21 +214,24 @@ const isDefiniteAuthFailure = (err: unknown) =>
   (err as { response?: { status?: number } })?.response?.status === 401;
 
 // Proactively refresh when the tab becomes visible and the token is close
-// to expiry, so the user never hits a 401 mid-session.
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState !== "visible") return;
-  const token = getAccessToken();
-  if (token && isExpiringSoon(token, 5 * 60)) {
-    // The token isn't expired yet — a transient failure here (e.g. the
-    // network hasn't reconnected after the laptop woke up right as this
-    // tab regained focus) shouldn't log the user out. Only act on a
-    // definitive rejection; otherwise leave the session alone and let the
-    // next real request retry the refresh.
-    performRefresh().catch((err) => {
-      if (isDefiniteAuthFailure(err)) forceLogout();
-    });
-  }
-});
+// to expiry, so the user never hits a 401 mid-session. Guarded because the
+// public pages are prerendered in Node at build time, where there's no
+// `document`, and they import this module through shared UI (Avatar).
+if (typeof document !== "undefined")
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    const token = getAccessToken();
+    if (token && isExpiringSoon(token, 5 * 60)) {
+      // The token isn't expired yet — a transient failure here (e.g. the
+      // network hasn't reconnected after the laptop woke up right as this
+      // tab regained focus) shouldn't log the user out. Only act on a
+      // definitive rejection; otherwise leave the session alone and let the
+      // next real request retry the refresh.
+      performRefresh().catch((err) => {
+        if (isDefiniteAuthFailure(err)) forceLogout();
+      });
+    }
+  });
 
 // ─── Request interceptor ──────────────────────────────────────────────────────
 apiClient.interceptors.request.use(
