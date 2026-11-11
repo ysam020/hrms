@@ -319,7 +319,20 @@ function openOne(
     throw new FieldCryptoError("UNSUPPORTED_VERSION");
   // Not yet migrated.
   if ("legacyCbc" in rule && rule.legacyCbc && typeof value === "string") {
-    if (/^[a-f0-9]{32}:[a-f0-9]+$/i.test(value)) return aesDecrypt(value);
+    if (/^[a-f0-9]{32}:[a-f0-9]+$/i.test(value)) {
+      // These are optional credentials (a calendar refresh token). One sealed
+      // under another environment's key can never be opened here; failing the
+      // whole read would lock the user out (Google sign-in reads the full
+      // record), so treat it as absent. The user reconnects the integration.
+      try {
+        return aesDecrypt(value);
+      } catch {
+        console.warn(
+          `[fieldProtection] unreadable legacy value in ${field}; treated as empty`,
+        );
+        return null;
+      }
+    }
   }
   if (rule.kind === "date") return legacyDate(value);
   if (rule.kind === "number") return legacyNumber(value);
