@@ -1,5 +1,6 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { Icon, type IconName } from "./Icon";
+import { useStoredImage } from "./storedImage";
 import s from "./display.module.css";
 
 // ── Avatar ──────────────────────────────────────────────────────────────────
@@ -44,6 +45,7 @@ export function Avatar({
   style?: CSSProperties;
 }) {
   const [failed, setFailed] = useState(false);
+  const image = useStoredImage(src);
   const [bg, fg] = tintFor(name || "?");
   return (
     <span
@@ -58,8 +60,13 @@ export function Avatar({
       }
       aria-hidden
     >
-      {src && !failed ? (
-        <img src={src} alt="" loading="lazy" onError={() => setFailed(true)} />
+      {image && !failed ? (
+        <img
+          src={image}
+          alt=""
+          loading="lazy"
+          onError={() => setFailed(true)}
+        />
       ) : (
         initials(name)
       )}
