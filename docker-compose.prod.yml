@@ -94,6 +94,7 @@ services:
       - NODE_ENV=production
       - FIELD_KMS_KEY_ID=alias/praesto-field-encryption
       - FIELD_LEGACY_PLAINTEXT_MATCH=true
+      - FIELD_VALIDATION_LEVEL=moderate
       - METRICS_PORT=9003
     ports:
       - "19002:9002"
