@@ -21,8 +21,15 @@ loadFaceMath()
   .then(() => {
     wasmReady = true;
   })
+  // Not fatal: every calculation has a JS fallback. The usual cause is a CSP
+  // without 'wasm-unsafe-eval' in script-src. A worker takes its CSP from its
+  // own response, and the service worker keeps that response under its hashed
+  // name, so a CSP fix only reaches a cached worker once this file changes.
   .catch((err) =>
-    console.error("[faceRecognition.worker] WASM load failed:", err),
+    console.warn(
+      "[faceRecognition.worker] WASM unavailable, using the JS fallback:",
+      err,
+    ),
   );
 
 // JS fallback used when WASM hasn't loaded yet

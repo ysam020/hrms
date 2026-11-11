@@ -26,17 +26,30 @@ function useNotifications() {
 
   const handleNotification = useCallback(
     (
-      data: import("@web/app/providers/NotificationContext").NotificationItem,
+      raw: import("@web/app/providers/NotificationContext").NotificationItem,
     ) => {
       // Silent pings (see NotificationJobData.silent) exist only to tell
       // listeners like ApprovalsBadgeContext to refetch — the event they
       // represent already has its own home in Pending Approvals, so it must
       // not also show up here as a bell entry.
-      if ((data as { silent?: boolean })?.silent) return;
+      if ((raw as { silent?: boolean })?.silent) return;
+      // The socket sends the stored record, keyed `id`; the cache (and the
+      // fetched list) key on `_id`. Same mapping as the fetch below.
+      const r = raw as typeof raw & {
+        id?: string;
+        body?: string;
+        createdAt?: string;
+      };
+      const data = {
+        ...raw,
+        _id: raw._id || r.id,
+        message: raw.message || r.body,
+        timeStamp: raw.timeStamp || r.createdAt,
+      } as typeof raw;
       setNotifications((prev) => {
         const exists = prev.some(
           (notif) =>
-            notif._id === data._id ||
+            (!!data._id && notif._id === data._id) ||
             (notif.title === data.title &&
               notif.message === data.message &&
               Math.abs(
@@ -47,9 +60,11 @@ function useNotifications() {
         return exists ? prev : [data, ...prev];
       });
 
-      saveNotification(data)
-        .then(() => pruneNotifications(200))
-        .catch(console.error);
+      // Without an id it can't be cached; it still shows in the bell.
+      if (data._id)
+        saveNotification(data)
+          .then(() => pruneNotifications(200))
+          .catch(console.error);
     },
     [],
   );
