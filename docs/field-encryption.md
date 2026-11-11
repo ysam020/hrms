@@ -56,6 +56,7 @@ Fields that were `Float`, `DateTime` or `Boolean` are `Json` in the schema, beca
 | `FIELD_KMS_REGION`             | optional           | Defaults to `AWS_REGION`, then `ap-south-1`.                                                     |
 | `FIELD_KEK_HEX`                | development, tests | 64 hex characters. Used only when `FIELD_KMS_KEY_ID` is unset and `NODE_ENV` isn't `production`. |
 | `FIELD_DEK_CACHE_TTL_MS`       | optional           | How long unwrapped keys stay in memory. Default 300000.                                          |
+| `FIELD_KMS_TIMEOUT_MS`         | optional           | Per-attempt KMS request timeout. Default 3000; connect timeout 1 s; 3 attempts.                  |
 | `FIELD_VALIDATION_LEVEL`       | optional           | `moderate` (default), `strict`, or `off`.                                                        |
 | `FIELD_LEGACY_PLAINTEXT_MATCH` | optional           | Lookups also match rows not yet migrated. Set `false` once the migration is verified.            |
 | `FIELD_MEMORY_SCAN_LIMIT`      | optional           | Row cap for in-memory search. Default 10000.                                                     |
@@ -65,11 +66,100 @@ Fields that were `Float`, `DateTime` or `Boolean` are `Json` in the schema, beca
 
 One symmetric key in the production account and region:
 
-- Key policy: account administrators manage it. The instance role may only do the following:
-  - `kms:GenerateDataKey` and `kms:Decrypt`, with condition `kms:EncryptionContext:app = praesto-field-encryption`;
-  - `kms:DescribeKey`.
+- Key policy: the account may administer the key but not use it for data. Only the application role may call `kms:GenerateDataKey` and `kms:Decrypt`, and only with all of these conditions:
+  - `kms:EncryptionContext:app` equals `praesto-field-encryption`;
+  - `kms:EncryptionContextKeys` is a subset of `app`, `scope`, `purpose`;
+  - `scope` and `purpose` are present.
+- The application needs no other KMS permission, not even `DescribeKey`.
+- Deny `kms:ScheduleKeyDeletion` and `kms:DisableKey` when `aws:MultiFactorAuthPresent` is false. Removing that guard then needs a deliberate key-policy change.
 - Enable automatic key rotation. KMS keeps old key material, so wrapped data keys stay readable.
-- Deleting the key, or removing the role's access, makes every protected value unreadable. Use the 30-day deletion window, and alarm on `ScheduleKeyDeletion` and `DisableKey`.
+- Deleting the key, or removing the role's access, makes every protected value unreadable. Use the 30-day deletion window, and alarm on `ScheduleKeyDeletion`, `DisableKey` and `PutKeyPolicy`.
+
+Example key policy (replace the placeholders):
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "KeyAdministrationOnlyNoDataUse",
+      "Effect": "Allow",
+      "Principal": { "AWS": "arn:aws:iam::<account>:root" },
+      "Action": [
+        "kms:Describe*",
+        "kms:Get*",
+        "kms:List*",
+        "kms:PutKeyPolicy",
+        "kms:UpdateKeyDescription",
+        "kms:CreateAlias",
+        "kms:UpdateAlias",
+        "kms:DeleteAlias",
+        "kms:EnableKey",
+        "kms:DisableKey",
+        "kms:EnableKeyRotation",
+        "kms:DisableKeyRotation",
+        "kms:RotateKeyOnDemand",
+        "kms:TagResource",
+        "kms:UntagResource",
+        "kms:ScheduleKeyDeletion",
+        "kms:CancelKeyDeletion",
+        "kms:RevokeGrant",
+        "kms:RetireGrant"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "FieldEnvelopeUseByApplicationOnly",
+      "Effect": "Allow",
+      "Principal": { "AWS": "<application role arn>" },
+      "Action": ["kms:GenerateDataKey", "kms:Decrypt"],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "kms:EncryptionContext:app": "praesto-field-encryption"
+        },
+        "ForAllValues:StringEquals": {
+          "kms:EncryptionContextKeys": ["app", "scope", "purpose"]
+        },
+        "Null": {
+          "kms:EncryptionContext:scope": "false",
+          "kms:EncryptionContext:purpose": "false"
+        }
+      }
+    },
+    {
+      "Sid": "DenyDisableOrDeleteWithoutMFA",
+      "Effect": "Deny",
+      "Principal": { "AWS": "*" },
+      "Action": ["kms:ScheduleKeyDeletion", "kms:DisableKey"],
+      "Resource": "*",
+      "Condition": { "BoolIfExists": { "aws:MultiFactorAuthPresent": "false" } }
+    }
+  ]
+}
+```
+
+The role's own IAM policy grants the same two actions with the same conditions, on the key ARN only.
+
+### Testing against real KMS
+
+`integration/fieldKmsReal.it.test.ts` is skipped unless `FIELD_KMS_REAL_KEY_ID` is set. Use a dedicated test key and an identity that can use only that key, never the production key:
+
+```
+FIELD_KMS_REAL_KEY_ID=<test key arn> AWS_ACCESS_KEY_ID=… AWS_SECRET_ACCESS_KEY=… \
+KMS_RESULTS_FILE=/tmp/kms.json NODE_OPTIONS=--experimental-vm-modules \
+  npx jest -c integration/jest.integration.config.cjs integration/fieldKmsReal.it.test.ts
+```
+
+It checks the following, using synthetic data in the local containers:
+
+- a round trip, with timings;
+- a wrapped key opens only under its own scope and purpose;
+- the identity is refused outside its policy;
+- the application path creates a tenant's keys through KMS;
+- behaviour when KMS is unreachable or a key is unknown.
+
+While KMS is unreachable, already-unwrapped keys keep working until their cache entry expires. After that, the scope fails closed with `FieldKeyUnavailableError`.
 
 ## Operations
 
@@ -121,3 +211,4 @@ node packages/database/dist/migrate-encrypt-pii.cli.js --verify --database=all -
 - `packages/crypto/src/__tests__/fieldCipher.test.ts`: cipher, tampering, rotation, keyed hashes.
 - `integration/fieldProtection.it.test.ts`: every protected field round-trips and is stored sealed; validators reject plaintext in each one; key isolation; queries; KMS envelope against a local emulator; migration.
 - `integration/fieldProtectionApi.it.test.ts`: real middleware and handlers return the same response shapes, and access rules still hold.
+- `integration/fieldKmsReal.it.test.ts`: real AWS KMS (opt-in; see above).

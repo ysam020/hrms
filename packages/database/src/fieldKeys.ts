@@ -55,6 +55,13 @@ class KmsKekProvider implements KekProvider {
         c: new m.KMSClient({
           region: this.region,
           ...(this.endpoint ? { endpoint: this.endpoint } : {}),
+          // Without these, an unreachable KMS holds a request for minutes
+          // (measured: 225 s) before the scope fails closed.
+          maxAttempts: 3,
+          requestHandler: {
+            connectionTimeout: 1000,
+            requestTimeout: Number(process.env.FIELD_KMS_TIMEOUT_MS) || 3000,
+          },
         }),
       };
     });
