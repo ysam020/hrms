@@ -1,5 +1,6 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { PII_REGISTRY, type FieldRule } from "./piiRegistry";
+import { sensitiveWritesAllowed } from "./fieldProtection";
 
 /**
  * Server-side $jsonSchema validators for every collection with protected
@@ -122,11 +123,17 @@ export const TENANT_PROTECTED_MODELS = Object.keys(PII_REGISTRY).filter(
   (m) => !MASTER_PROTECTED_MODELS.includes(m),
 );
 
+/**
+ * Off unless explicitly enabled. Validators reject plaintext, so they must
+ * not be installed while any process on an older build still writes to the
+ * database: they are turned on deliberately, once every service runs this
+ * code (docs/field-encryption.md, rollout).
+ */
 export function validationLevelFromEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): ValidationLevel {
   const v = env.FIELD_VALIDATION_LEVEL;
-  return v === "off" || v === "strict" ? v : "moderate";
+  return v === "moderate" || v === "strict" ? v : "off";
 }
 
 /**
@@ -140,6 +147,9 @@ export async function ensureFieldValidators(
   level: ValidationLevel = validationLevelFromEnv(),
 ): Promise<string[]> {
   if (level === "off") return [];
+  // A development process sharing the production database must never
+  // change that database's collection rules.
+  if (!sensitiveWritesAllowed()) return [];
   const raw = (cmd: Record<string, unknown>) =>
     (client.$runCommandRaw as (c: unknown) => Promise<any>)(cmd);
   const existing = new Set<string>(

@@ -57,7 +57,7 @@ Fields that were `Float`, `DateTime` or `Boolean` are `Json` in the schema, beca
 | `FIELD_KEK_HEX`                | development, tests | 64 hex characters. Used only when `FIELD_KMS_KEY_ID` is unset and `NODE_ENV` isn't `production`. |
 | `FIELD_DEK_CACHE_TTL_MS`       | optional           | How long unwrapped keys stay in memory. Default 300000.                                          |
 | `FIELD_KMS_TIMEOUT_MS`         | optional           | Per-attempt KMS request timeout. Default 3000; connect timeout 1 s; 3 attempts.                  |
-| `FIELD_VALIDATION_LEVEL`       | optional           | `moderate` (default), `strict`, or `off`.                                                        |
+| `FIELD_VALIDATION_LEVEL`       | optional           | `off` (default), `moderate` or `strict`. Enable only once every service runs this build.         |
 | `FIELD_LEGACY_PLAINTEXT_MATCH` | optional           | Lookups also match rows not yet migrated. Set `false` once the migration is verified.            |
 | `FIELD_MEMORY_SCAN_LIMIT`      | optional           | Row cap for in-memory search. Default 10000.                                                     |
 | `CRYPTO_ENCRYPTION_KEY`        | all                | Still required: transient sealing, and reading values sealed by the earlier `enc:v1` scheme.     |
@@ -173,6 +173,8 @@ CONFIRM_DB_WRITE_HOST=<host> EXPECTED_KEK_ID=<kms key> \
 ```
 
 ### Migrating existing data
+
+Rollout order: deploy every service with `FIELD_VALIDATION_LEVEL` unset, so no validators are installed while an older build may still write. Then migrate. Then set `FIELD_VALIDATION_LEVEL=moderate` (or use `--set-validation`), and `strict` once verified. A development process connected to a shared database never installs validators, whatever the setting.
 
 ```
 node packages/database/dist/migrate-encrypt-pii.cli.js --dry-run --database=all
