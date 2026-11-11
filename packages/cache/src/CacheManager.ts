@@ -1,3 +1,4 @@
+import { sealTransient, openTransient } from "@hrms/crypto";
 import type Redis from "ioredis";
 import {
   logger,
@@ -266,7 +267,8 @@ export class CacheManager {
     }
     let value: unknown;
     try {
-      value = JSON.parse(raw);
+      // Sealed at rest (see set); older plain-JSON entries still parse.
+      value = openTransient(raw);
     } catch {
       count(family, "miss");
       return { hit: false };
@@ -377,7 +379,9 @@ export class CacheManager {
       // read loads again), waiting on a dead Redis is not.
       const redis = getCacheRedisClient();
       const multi = redis.multi();
-      multi.set(key, JSON.stringify(value ?? null), "EX", ttl);
+      // Sealed, so cached responses that include personal data aren't
+      // readable from Redis or its persistence files.
+      multi.set(key, sealTransient(value ?? null), "EX", ttl);
       // Index this key under every ancestor prefix so a later
       // invalidatePattern("<prefix>:*") can find it in O(1) instead of
       // scanning the whole keyspace. Each index set's own TTL is refreshed

@@ -60,7 +60,7 @@ describe("startEmailWorker", () => {
       html: "<p>hi</p>",
       from: undefined,
     });
-    expect(logger.info).toHaveBeenCalledWith("Email sent to a@b.com", {
+    expect(logger.info).toHaveBeenCalledWith("Email sent", {
       jobId: "j1",
     });
   });

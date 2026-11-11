@@ -47,7 +47,7 @@ export const sendEmail = async (options: {
       })),
     });
     if (error) throw new Error(error.message);
-    logger.info(`Email sent to ${options.to}`);
+    logger.info("Email sent");
   } catch (error) {
     logger.error("Failed to send email:", { error });
     throw error;

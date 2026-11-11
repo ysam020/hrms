@@ -1,6 +1,7 @@
 import dayjs from "dayjs";
 import { jsPDF } from "jspdf";
 import { prismaWithTenant as prisma, prisma as masterPrisma } from "@hrms/db";
+import { protectedNumber } from "@hrms/db/values";
 import {
   deriveOfferCompensationBreakup,
   OFFER_COMPENSATION_DISCLAIMER,
@@ -250,7 +251,9 @@ export async function buildOfferLetterPdf(
     ({ rows: compensationRows, totalCTC } =
       buildCompensationRowsFromComponents(hiredComponents));
   } else {
-    const breakup = deriveOfferCompensationBreakup(application.hireSalary);
+    const breakup = deriveOfferCompensationBreakup(
+      protectedNumber(application.hireSalary) ?? 0,
+    );
     compensationRows = [
       ["Basic Salary", breakup.basic],
       ["House Rent Allowance", breakup.hra],

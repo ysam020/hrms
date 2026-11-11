@@ -1,5 +1,6 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { prismaWithTenant, getTenantId } from "@hrms/db";
+import { protectedDate } from "@hrms/db/values";
 import { logger } from "@hrms/logger";
 import { readSensitiveForDisplay } from "@hrms/crypto";
 import { cacheManager } from "@hrms/cache";
@@ -157,7 +158,7 @@ export const getUser = async (
         designation: user.designation ?? "",
         employeeStatus: user.employeeStatus ?? "",
         employeePhoto: user.employee_photo ?? "",
-        dob: toIsoOrEmpty(user.dob),
+        dob: toIsoOrEmpty(protectedDate(user.dob)),
         bloodGroup: user.blood_group ?? "",
         officialEmail: user.official_email ?? "",
         joiningDate: toIsoOrEmpty(user.joining_date),

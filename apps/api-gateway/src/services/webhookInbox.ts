@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 import { prisma } from "@hrms/db";
-import { encryptField } from "@hrms/crypto";
 import { logger } from "@hrms/logger";
 
 /**
@@ -17,7 +16,6 @@ import { logger } from "@hrms/logger";
 
 const LEASE_MS = 2 * 60 * 1000;
 export const MAX_WEBHOOK_ATTEMPTS = 8;
-const PAYLOAD_FIELD = "webhook_inbox_payload";
 
 export type WebhookClaim =
   | { outcome: "claimed"; id: string }
@@ -44,7 +42,8 @@ export async function claimWebhookEvent(input: {
         eventType,
         status: "processing",
         leaseUntil: leaseFromNow(),
-        payload: encryptField(rawBody, PAYLOAD_FIELD),
+        // Sealed by the field-protection hook.
+        payload: rawBody,
       },
       select: { id: true },
     });

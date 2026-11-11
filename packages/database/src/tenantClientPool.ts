@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { logger } from "@hrms/logger";
 import { attachAuditLogging } from "./auditMiddleware";
 import { attachQueryTiming } from "./queryTiming";
+import { attachFieldProtection } from "./fieldProtection";
 import { activeLeases, cancelWhenIdle, whenIdle } from "./clientLeases";
 
 // Every service process (api-gateway, each microservice, notification worker,
@@ -122,6 +123,8 @@ export function getClientForDb(dbName: string): PrismaClient {
   });
   attachQueryTiming(client, "tenant");
   attachAuditLogging(client);
+  // Each tenant database has its own data keys, scoped by database name.
+  attachFieldProtection(client, dbName);
   pool.set(dbName, { client, lastUsed: Date.now() });
   logger.info("Tenant DB client created", { poolSize: pool.size });
   return client;

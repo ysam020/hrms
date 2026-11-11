@@ -1,14 +1,25 @@
 import { Worker } from "bullmq";
 import { getBullMQConnection, getDeadLetterQueue } from "@hrms/queue";
 import { sendEmail } from "@hrms/common";
+import { openTransient } from "@hrms/crypto";
 import { logger, requestIdStorage } from "@hrms/logger";
 import type { EmailJobData } from "@hrms/queue";
 import type { Job } from "bullmq";
 
 async function processJob(job: Job<EmailJobData>) {
-  const { to, subject, html, from, replyTo, attachments } = job.data;
+  const { to, subject, html, from, replyTo, attachments } = openJobData(
+    job.data,
+  );
   await sendEmail({ to, subject, html, from, replyTo, attachments });
-  logger.info(`Email sent to ${to}`, { jobId: job.id });
+  // No address in the log line.
+  logger.info("Email sent", { jobId: job.id });
+}
+
+/** Job data as enqueued: sealed by notify(), or plain from an older build. */
+function openJobData(data: EmailJobData & { sealed?: string }): EmailJobData {
+  return data.sealed
+    ? { ...openTransient<EmailJobData>(data.sealed), requestId: data.requestId }
+    : data;
 }
 
 export function startEmailWorker(): Worker {

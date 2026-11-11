@@ -1,5 +1,6 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { prismaWithTenant as prisma } from "@hrms/db";
+import { protectedNumber } from "@hrms/db/values";
 import { logger } from "@hrms/logger";
 import { MESSAGES } from "../constants/messages";
 import { deriveFromComponents, toWireSalaryStructure } from "@hrms/common";
@@ -53,24 +54,32 @@ export const updateSalaryStructure = async (
       const basic =
         basicPay !== undefined
           ? parseFloat(basicPay)
-          : (existing.basicPay ?? 0);
-      const hraAmt = hra !== undefined ? parseFloat(hra) : (existing.hra ?? 0);
+          : (protectedNumber(existing.basicPay) ?? 0);
+      const hraAmt =
+        hra !== undefined
+          ? parseFloat(hra)
+          : (protectedNumber(existing.hra) ?? 0);
       const conv =
         conveyance !== undefined
           ? parseFloat(conveyance)
-          : (existing.conveyance ?? 0);
+          : (protectedNumber(existing.conveyance) ?? 0);
       const inc =
         incentive !== undefined
           ? parseFloat(incentive)
-          : (existing.incentive ?? 0);
-      const pfAmt = pf !== undefined ? parseFloat(pf) : (existing.pf ?? 0);
-      const esiAmt = esi !== undefined ? parseFloat(esi) : (existing.esi ?? 0);
-      const ptAmt = pt !== undefined ? parseFloat(pt) : (existing.pt ?? 0);
+          : (protectedNumber(existing.incentive) ?? 0);
+      const pfAmt =
+        pf !== undefined ? parseFloat(pf) : (protectedNumber(existing.pf) ?? 0);
+      const esiAmt =
+        esi !== undefined
+          ? parseFloat(esi)
+          : (protectedNumber(existing.esi) ?? 0);
+      const ptAmt =
+        pt !== undefined ? parseFloat(pt) : (protectedNumber(existing.pt) ?? 0);
 
       const deductAmt =
         deductions !== undefined
           ? parseFloat(deductions)
-          : (existing.deductions ?? 0);
+          : (protectedNumber(existing.deductions) ?? 0);
 
       const grossEarnings = basic + hraAmt + conv + inc;
       const netPayable = grossEarnings - (pfAmt + esiAmt + ptAmt + deductAmt);

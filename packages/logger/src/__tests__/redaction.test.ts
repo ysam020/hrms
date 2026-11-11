@@ -227,3 +227,46 @@ describe("error serialization for log lines", () => {
     expect(wasLogged("not an error")).toBe(false);
   });
 });
+
+describe("log-only personal data", () => {
+  const { redactForLog, scrubText } = require("../redaction");
+
+  it("hides encrypted-at-rest personal fields from log lines", () => {
+    const out = redactForLog({
+      user: {
+        first_name: "Asha",
+        email: "asha@example.test",
+        mobile: "+919876543210",
+        permanent_address_line_1: "12 MG Road",
+        department: "Engineering",
+      },
+      salary: { grossSalary: 90000, month: 3 },
+      err: {
+        name: "PrismaClientKnownRequestError",
+        message: "Unique constraint failed for asha@example.test",
+      },
+    }) as any;
+    expect(out.user).toEqual({
+      first_name: "[REDACTED]",
+      email: "[REDACTED]",
+      mobile: "[REDACTED]",
+      permanent_address_line_1: "[REDACTED]",
+      department: "Engineering",
+    });
+    expect(out.salary).toBe("[REDACTED]");
+    expect(out.err.name).toBe("PrismaClientKnownRequestError");
+    expect(out.err.message).toBe(
+      "Unique constraint failed for [REDACTED-EMAIL]",
+    );
+  });
+
+  it("scrubs email, PAN and Indian mobile numbers out of free text", () => {
+    expect(
+      scrubText(
+        "pan ABCDE1234F, call +91 98765 43210 or 9876543210, mail a.b@x.io",
+      ),
+    ).toBe(
+      "pan [REDACTED-ID], call [REDACTED-PHONE] or [REDACTED-PHONE], mail [REDACTED-EMAIL]",
+    );
+  });
+});

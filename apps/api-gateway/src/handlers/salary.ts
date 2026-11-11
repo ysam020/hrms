@@ -3,6 +3,7 @@ import { salary } from "@hrms/proto";
 import { salaryClient, grpcCall } from "../grpc/clients";
 import { AuthRequest } from "../middleware/authenticate";
 import { prismaWithTenant as prisma, prisma as masterPrisma } from "@hrms/db";
+import { protectedNumber } from "@hrms/db/values";
 import {
   apiResponse,
   RESPONSE_STATUS,
@@ -619,25 +620,25 @@ export async function buildSalarySlipPdf(
       calcOtherDed: number;
 
     if (disbursedLineItem) {
-      calcBasicPay = disbursedLineItem.basicPay ?? 0;
-      calcHra = disbursedLineItem.hra ?? 0;
-      calcConveyance = disbursedLineItem.conveyance ?? 0;
-      calcPf = disbursedLineItem.pf ?? 0;
-      calcEsi = disbursedLineItem.esi ?? 0;
-      calcPt = disbursedLineItem.pt ?? 0;
+      calcBasicPay = protectedNumber(disbursedLineItem.basicPay) ?? 0;
+      calcHra = protectedNumber(disbursedLineItem.hra) ?? 0;
+      calcConveyance = protectedNumber(disbursedLineItem.conveyance) ?? 0;
+      calcPf = protectedNumber(disbursedLineItem.pf) ?? 0;
+      calcEsi = protectedNumber(disbursedLineItem.esi) ?? 0;
+      calcPt = protectedNumber(disbursedLineItem.pt) ?? 0;
       // Older line items keep the part of gross not allocated to Basic, HRA
       // or Conveyance outside any component, so show it here or the rows
       // don't add up to what was paid.
       calcIncentive =
-        disbursedLineItem.incentive ||
+        protectedNumber(disbursedLineItem.incentive) ||
         Math.max(
           0,
-          disbursedLineItem.grossSalary -
+          (protectedNumber(disbursedLineItem.grossSalary) ?? 0) -
             calcBasicPay -
             calcHra -
             calcConveyance,
         );
-      calcOtherDed = disbursedLineItem.otherDeductions ?? 0;
+      calcOtherDed = protectedNumber(disbursedLineItem.otherDeductions) ?? 0;
     } else {
       // No disbursed run yet for this month — prorate the already-stored,
       // already-configured baseline salary structure by attendance instead
@@ -701,8 +702,8 @@ export async function buildSalarySlipPdf(
     });
     if (activeAdvance) {
       advanceDeductionAmount = Math.min(
-        activeAdvance.emiAmount ?? 0,
-        activeAdvance.remainingAmount ?? 0,
+        protectedNumber(activeAdvance.emiAmount) ?? 0,
+        protectedNumber(activeAdvance.remainingAmount) ?? 0,
       );
     }
   }

@@ -2,7 +2,7 @@
 process.env.CRYPTO_ENCRYPTION_KEY = "c".repeat(64);
 
 import { prisma, ensureMasterIndexes } from "@hrms/db";
-import { isFieldCiphertext } from "@hrms/crypto";
+import { isEncrypted } from "@hrms/crypto";
 import {
   claimWebhookEvent,
   completeWebhookEvent,
@@ -22,6 +22,16 @@ const row = (eventId = "evt_1") =>
     where: { provider_eventId: { provider: "razorpay", eventId } },
   });
 const id = (c: any) => c.id as string;
+// What the database holds (Prisma reads come back opened).
+const storedPayload = async (eventId = "evt_1") =>
+  (
+    (await prisma.$runCommandRaw({
+      find: "webhook_inbox_events",
+      filter: { eventId },
+      limit: 1,
+      singleBatch: true,
+    })) as any
+  ).cursor.firstBatch[0]?.payload;
 
 beforeAll(ensureMasterIndexes);
 beforeEach(async () => {
@@ -33,8 +43,9 @@ it("claims a new event and seals its payload", async () => {
   expect((await claimWebhookEvent(input())).outcome).toBe("claimed");
   const r = await row();
   expect(r?.status).toBe("processing");
-  expect(isFieldCiphertext(r?.payload)).toBe(true);
-  expect(r?.payload).not.toContain("synthetic");
+  expect(isEncrypted(await storedPayload())).toBe(true);
+  expect(await storedPayload()).not.toContain("synthetic");
+  expect(r?.payload).toBe(BODY);
 });
 
 it("treats a redelivery after success as a duplicate and drops the payload", async () => {
@@ -101,7 +112,7 @@ it("parks an event that keeps failing", async () => {
   await failWebhookEvent(id(c), new Error("x"));
   const r = await row();
   expect(r?.status).toBe("dead");
-  expect(isFieldCiphertext(r?.payload)).toBe(true);
+  expect(isEncrypted(await storedPayload())).toBe(true);
   expect((await claimWebhookEvent(input())).outcome).toBe("duplicate");
 });
 

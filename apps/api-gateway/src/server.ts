@@ -43,6 +43,7 @@ import { startPayrollDisbursementWorker } from "./workers/payrollDisbursementWor
 import { startPresenceExpiryWorker } from "./workers/presenceExpiryWorker";
 import {
   ensureMasterIndexes,
+  ensureAllFieldValidators,
   withQueryStats,
   currentQueryStats,
   endQueryStats,
@@ -300,7 +301,8 @@ function startServer(server: http.Server | http2.Http2SecureServer) {
     (!cluster.isWorker || cluster.worker?.id === 1) &&
     outboundSideEffectsAllowed()
   ) {
-    void ensureMasterIndexes();
+    // Indexes first: the field-encryption keys need their unique index.
+    void ensureMasterIndexes().then(() => ensureAllFieldValidators());
     void import("./migrations/backfillPlanTier").then(({ backfillPlanTier }) =>
       backfillPlanTier(),
     );

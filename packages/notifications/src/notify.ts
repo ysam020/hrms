@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { getEmailQueue, getNotificationQueue } from "@hrms/queue";
+import { sealTransient } from "@hrms/crypto";
 import type { NotifyOptions, NotifyResult } from "./types";
 
 /**
@@ -26,20 +27,24 @@ export async function notify(options: NotifyOptions): Promise<NotifyResult> {
       options.event,
       {
         tenantId: options.tenantId,
-        title: options.inApp.title,
-        message: options.inApp.message,
-        recipients: options.recipients,
-        pushTargets: options.pushTargets,
-        targetUser: options.targetUser,
-        broadcast: options.broadcast,
-        eventType: options.inApp.eventType,
-        sendPushNotification: options.push?.enabled ?? true,
-        priority: options.inApp.priority,
-        silent: options.inApp.silent,
-        socketEvent: options.inApp.socketEvent,
-        socketPayload: options.inApp.socketPayload,
-        metadata: { ...options.metadata, notificationId },
-      },
+        // Text and targets are sealed: BullMQ keeps job data in Redis, and
+        // failed jobs are copied to the dead-letter queue.
+        sealed: sealTransient({
+          title: options.inApp.title,
+          message: options.inApp.message,
+          recipients: options.recipients,
+          pushTargets: options.pushTargets,
+          targetUser: options.targetUser,
+          broadcast: options.broadcast,
+          eventType: options.inApp.eventType,
+          sendPushNotification: options.push?.enabled ?? true,
+          priority: options.inApp.priority,
+          silent: options.inApp.silent,
+          socketEvent: options.inApp.socketEvent,
+          socketPayload: options.inApp.socketPayload,
+          metadata: { ...options.metadata, notificationId },
+        }),
+      } as never,
       // The job id is also the worker's idempotency key (Notification.jobId).
       // A UUID stays unique even if Redis loses recent writes and its job
       // counter rolls back, which would otherwise reissue ids already stored
@@ -62,13 +67,15 @@ export async function notify(options: NotifyOptions): Promise<NotifyResult> {
     const emailJobs = await Promise.all(
       recipients.map((to) =>
         getEmailQueue().add(options.event, {
-          to,
-          subject,
-          html,
-          from,
-          replyTo,
-          attachments,
-        }),
+          sealed: sealTransient({
+            to,
+            subject,
+            html,
+            from,
+            replyTo,
+            attachments,
+          }),
+        } as never),
       ),
     );
     jobIds.email = emailJobs

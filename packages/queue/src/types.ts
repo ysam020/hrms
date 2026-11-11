@@ -1,3 +1,11 @@
+/** What producers enqueue: the job data below, sealed (see @hrms/crypto
+ * sealTransient). Workers open it with openJobData. */
+export interface SealedJobData {
+  sealed: string;
+  tenantId?: string;
+  requestId?: string;
+}
+
 export interface EmailJobData {
   to: string;
   subject: string;

@@ -1,7 +1,11 @@
 import { PrismaClient } from "@prisma/client";
 import { attachMasterAuditLogging } from "./auditMiddleware";
 import { attachQueryTiming } from "./queryTiming";
-import { attachFieldEncryption } from "./fieldEncryption";
+import { attachFieldProtection } from "./fieldProtection";
+import { bindFieldKeyStore, type KeyStoreDb } from "./fieldKeys";
+
+/** Data-key scope of the master database. Tenant databases use their dbName. */
+export const MASTER_SCOPE = "master";
 
 declare global {
   var prisma: PrismaClient | undefined;
@@ -17,7 +21,11 @@ function createClient(): PrismaClient {
   });
   attachQueryTiming(client, "master");
   attachMasterAuditLogging(client);
-  attachFieldEncryption(client);
+  // Registered last, so it runs innermost: the audit hook above sees the
+  // values this process wrote and read, and the database sees only sealed
+  // ones. The audit hook redacts protected fields before storing anything.
+  attachFieldProtection(client, MASTER_SCOPE);
+  bindFieldKeyStore(() => client as unknown as KeyStoreDb);
   return client;
 }
 

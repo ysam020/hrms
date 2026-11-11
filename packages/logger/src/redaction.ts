@@ -137,16 +137,102 @@ function walk(
   return out;
 }
 
+// Personal fields that are encrypted in the database (see
+// packages/database/src/piiRegistry.ts). The audit trail keeps showing them
+// to people allowed to read it, so they are hidden from log lines only.
+const LOG_ONLY_EXACT = new Set(
+  [
+    "first_name",
+    "middle_name",
+    "last_name",
+    "firstName",
+    "lastName",
+    "fullName",
+    "username",
+    "userEmail",
+    "email",
+    "official_email",
+    "officialEmail",
+    "personalEmail",
+    "assignedOfficialEmail",
+    "recipients",
+    "to",
+    "mobile",
+    "phone",
+    "dob",
+    "dateOfBirth",
+    "blood_group",
+    "bloodGroup",
+    "uan_no",
+    "pf_no",
+    "esic_no",
+    "uanNo",
+    "pfNo",
+    "esicNo",
+    "bank_name",
+    "employee_photo",
+    "medicalCertificate",
+    "wfhHomeLatitude",
+    "wfhHomeLongitude",
+    "wfhHomeName",
+    "latitude",
+    "longitude",
+    "ip",
+    "ipAddress",
+    "userAgent",
+    "deviceFingerprint",
+    "grossSalary",
+    "netPayable",
+    "basicPay",
+    "hra",
+    "conveyance",
+    "incentive",
+    "grossEarnings",
+    "totalDeductions",
+    "hireSalary",
+    "offeredCTC",
+    "amount",
+    "emiAmount",
+    "remainingAmount",
+    "componentBreakdown",
+    "lineItems",
+    "html",
+    "subject",
+    "profile",
+    "screeningAnswers",
+    "scorecards",
+    "answers",
+    "content",
+    "comment",
+    "body",
+    "selfComments",
+    "managerComments",
+  ].map(normalizeKey),
+);
+// Not `name`: error objects carry their class in it.
+const LOG_ONLY_PATTERNS: RegExp[] = [/address/, /salary/, /^candidatename$/];
+
+export function isLogOnlyPii(key: string): boolean {
+  const k = normalizeKey(key);
+  return LOG_ONLY_EXACT.has(k) || LOG_ONLY_PATTERNS.some((p) => p.test(k));
+}
+
 // Values that are sensitive by shape even when their key is not — e.g. a
 // Prisma validation error echoes the whole `data: { aadharNo: "…" }`
 // argument inside its message text, where key-based rules can't see it.
 const AADHAAR_LIKE = /\b\d{4}[ -]?\d{4}[ -]?\d{4}\b/g;
+const EMAIL_LIKE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+const PAN_LIKE = /\b[A-Z]{5}[0-9]{4}[A-Z]\b/g;
+const PHONE_LIKE = /(?:\+91[ -]?)?\b[6-9]\d{4}[ -]?\d{5}\b/g;
 const DATA_URL = /data:[a-z]+\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]{64,}/gi;
 
 export function scrubText(text: string): string {
   return text
     .replace(DATA_URL, (m) => `[OMITTED data URL: ${m.length} chars]`)
-    .replace(AADHAAR_LIKE, "[REDACTED-ID]");
+    .replace(AADHAAR_LIKE, "[REDACTED-ID]")
+    .replace(EMAIL_LIKE, "[REDACTED-EMAIL]")
+    .replace(PAN_LIKE, "[REDACTED-ID]")
+    .replace(PHONE_LIKE, "[REDACTED-PHONE]");
 }
 
 /**
@@ -169,7 +255,10 @@ function walkLog(value: unknown, seen: WeakSet<object>): unknown {
   const out: Record<string, unknown> = {};
   for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
     const cls = classifyField(key);
-    if (cls === "secret")
+    if (
+      cls === "secret" ||
+      (v !== null && v !== undefined && isLogOnlyPii(key))
+    )
       out[key] = v === null || v === undefined ? v : REDACTED;
     else if (cls === "omit")
       out[key] = v === null || v === undefined ? v : omittedMarker(v);

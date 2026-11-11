@@ -1,9 +1,31 @@
 const mockNotificationAdd = jest.fn();
 const mockEmailAdd = jest.fn();
 
+// Job data is sealed before it reaches Redis. These assertions are about
+// what the job carries, so the queue mock records the opened payload; the
+// sealing itself is checked at the end of this file.
+const mockRawAdds: unknown[][] = [];
+const opened = (data: any) => {
+  const { openTransient } = jest.requireActual("@hrms/crypto");
+  return data?.sealed
+    ? { ...data, ...openTransient(data.sealed), sealed: undefined }
+    : data;
+};
 jest.mock("@hrms/queue", () => ({
-  getNotificationQueue: jest.fn(() => ({ add: mockNotificationAdd })),
-  getEmailQueue: jest.fn(() => ({ add: mockEmailAdd })),
+  getNotificationQueue: jest.fn(() => ({
+    add: (name: string, data: any, opts: any) => (
+      mockRawAdds.push([name, data, opts]),
+      mockNotificationAdd(name, opened(data), opts)
+    ),
+  })),
+  getEmailQueue: jest.fn(() => ({
+    add: (name: string, data: any, opts?: any) => (
+      mockRawAdds.push([name, data, opts]),
+      opts === undefined
+        ? mockEmailAdd(name, opened(data))
+        : mockEmailAdd(name, opened(data), opts)
+    ),
+  })),
 }));
 
 import { notify } from "../notify";
@@ -246,5 +268,38 @@ describe("notify", () => {
     expect(mockNotificationAdd).not.toHaveBeenCalled();
     expect(mockEmailAdd).not.toHaveBeenCalled();
     expect(result.jobIds).toEqual({});
+  });
+});
+
+describe("job data at rest", () => {
+  it("seals in-app and email job content when a key is configured", async () => {
+    const prev = process.env.CRYPTO_ENCRYPTION_KEY;
+    process.env.CRYPTO_ENCRYPTION_KEY = "c".repeat(64);
+    mockRawAdds.length = 0;
+    try {
+      await notify({
+        tenantId: "t1",
+        event: "x",
+        recipients: ["u1"],
+        inApp: {
+          title: "Asha's leave",
+          message: "Asha Rao applied",
+          eventType: "leave_notification",
+        },
+        email: {
+          to: "asha@example.test",
+          subject: "Leave",
+          html: "<p>Asha Rao</p>",
+          from: "hr@x.test",
+        },
+      } as any);
+      const stored = JSON.stringify(mockRawAdds);
+      expect(stored).not.toContain("Asha");
+      expect(stored).not.toContain("asha@example.test");
+      expect(stored).toContain('"tenantId":"t1"');
+      expect((mockRawAdds[0][1] as any).sealed).toMatch(/^t1:/);
+    } finally {
+      process.env.CRYPTO_ENCRYPTION_KEY = prev;
+    }
   });
 });

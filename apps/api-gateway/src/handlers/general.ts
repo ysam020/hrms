@@ -6,6 +6,7 @@ import {
   getTenantId,
   redactAuditValue,
 } from "@hrms/db";
+import { protectedDate } from "@hrms/db/values";
 import { logger } from "@hrms/logger";
 import {
   apiResponse,
@@ -254,7 +255,7 @@ export async function getBirthdaysAnniversaries(req: Request, res: Response) {
         `${emp.first_name || ""} ${emp.last_name || ""}`.trim() || emp.username;
 
       if (emp.dob) {
-        const dob = dayjs.utc(emp.dob);
+        const dob = dayjs.utc(protectedDate(emp.dob));
         if (dob.isValid() && dob.month() + 1 === monthNum) {
           data.push({
             type: "birthday",

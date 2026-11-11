@@ -3,6 +3,7 @@ import { Request, Response } from "express";
 import { jsPDF } from "jspdf";
 import { AuthRequest } from "../middleware/authenticate";
 import { prismaWithTenant as prisma } from "@hrms/db";
+import { protectedDate } from "@hrms/db/values";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { logger } from "@hrms/logger";
 import { handleError } from "../utils/handleError";
@@ -75,7 +76,10 @@ export async function generateForm16(req: Request, res: Response) {
       employee.username;
 
     const panNo = readSensitiveForDisplay(employee.pan_no, "pan_no");
-    const pdfPassword = derivePdfPassword(panNo, employee.dob?.toISOString());
+    const pdfPassword = derivePdfPassword(
+      panNo,
+      protectedDate(employee.dob)?.toISOString(),
+    );
     if (!pdfPassword) {
       return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
         message:

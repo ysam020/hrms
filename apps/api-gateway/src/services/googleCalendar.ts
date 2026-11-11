@@ -2,7 +2,6 @@
 // only calendar scheduling needs it.
 const loadGoogle = async () => (await import("googleapis")).google;
 type Google = Awaited<ReturnType<typeof loadGoogle>>;
-import { aesDecrypt } from "@hrms/crypto";
 
 // "Connect Google Calendar" consent flow — deliberately separate from the
 // login OAuth flow (googleAuthRedirect/googleAuthCallback in handlers/auth.ts)
@@ -59,9 +58,11 @@ export async function exchangeCalendarCode(code: string): Promise<string> {
 }
 
 async function getFreshAccessToken(
+  // Already opened by the field-protection hook (including the older CBC
+  // form), so it arrives as the plain token.
   encryptedRefreshToken: string,
 ): Promise<string> {
-  const refreshToken = aesDecrypt(encryptedRefreshToken);
+  const refreshToken = encryptedRefreshToken;
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
