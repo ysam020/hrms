@@ -92,6 +92,8 @@ services:
       - GRPC_SKIP_HOSTNAME_VERIFICATION=true
       - SERVICE_NAME=api-gateway
       - NODE_ENV=production
+      - FIELD_KMS_KEY_ID=alias/praesto-field-encryption
+      - FIELD_LEGACY_PLAINTEXT_MATCH=true
       - METRICS_PORT=9003
     ports:
       - "19002:9002"
@@ -119,6 +121,8 @@ services:
     environment:
       - SERVICE_NAME=auth-service
       - NODE_ENV=production
+      - FIELD_KMS_KEY_ID=alias/praesto-field-encryption
+      - FIELD_LEGACY_PLAINTEXT_MATCH=true
       - METRICS_PORT=9101
     <<: *backend-service
 
@@ -128,6 +132,8 @@ services:
     environment:
       - SERVICE_NAME=user-service
       - NODE_ENV=production
+      - FIELD_KMS_KEY_ID=alias/praesto-field-encryption
+      - FIELD_LEGACY_PLAINTEXT_MATCH=true
       - METRICS_PORT=9102
     <<: *backend-service
 
@@ -137,6 +143,8 @@ services:
     environment:
       - SERVICE_NAME=employee-service
       - NODE_ENV=production
+      - FIELD_KMS_KEY_ID=alias/praesto-field-encryption
+      - FIELD_LEGACY_PLAINTEXT_MATCH=true
       - METRICS_PORT=9103
     <<: *backend-service
 
@@ -146,6 +154,8 @@ services:
     environment:
       - SERVICE_NAME=attendance-service
       - NODE_ENV=production
+      - FIELD_KMS_KEY_ID=alias/praesto-field-encryption
+      - FIELD_LEGACY_PLAINTEXT_MATCH=true
       - METRICS_PORT=9104
     <<: *backend-service
 
@@ -155,6 +165,8 @@ services:
     environment:
       - SERVICE_NAME=leave-service
       - NODE_ENV=production
+      - FIELD_KMS_KEY_ID=alias/praesto-field-encryption
+      - FIELD_LEGACY_PLAINTEXT_MATCH=true
       - METRICS_PORT=9105
     <<: *backend-service
 
@@ -164,6 +176,8 @@ services:
     environment:
       - SERVICE_NAME=recruitment-service
       - NODE_ENV=production
+      - FIELD_KMS_KEY_ID=alias/praesto-field-encryption
+      - FIELD_LEGACY_PLAINTEXT_MATCH=true
       - METRICS_PORT=9106
     <<: *backend-service
 
@@ -173,6 +187,8 @@ services:
     environment:
       - SERVICE_NAME=hrm-service
       - NODE_ENV=production
+      - FIELD_KMS_KEY_ID=alias/praesto-field-encryption
+      - FIELD_LEGACY_PLAINTEXT_MATCH=true
       - METRICS_PORT=9107
     <<: *backend-service
 
@@ -182,6 +198,8 @@ services:
     environment:
       - SERVICE_NAME=salary-service
       - NODE_ENV=production
+      - FIELD_KMS_KEY_ID=alias/praesto-field-encryption
+      - FIELD_LEGACY_PLAINTEXT_MATCH=true
       - METRICS_PORT=9108
     <<: *backend-service
 
@@ -191,6 +209,8 @@ services:
     environment:
       - SERVICE_NAME=analytics-service
       - NODE_ENV=production
+      - FIELD_KMS_KEY_ID=alias/praesto-field-encryption
+      - FIELD_LEGACY_PLAINTEXT_MATCH=true
       - METRICS_PORT=9109
     <<: *backend-service
 
@@ -200,6 +220,8 @@ services:
     environment:
       - SERVICE_NAME=notification-service
       - NODE_ENV=production
+      - FIELD_KMS_KEY_ID=alias/praesto-field-encryption
+      - FIELD_LEGACY_PLAINTEXT_MATCH=true
       - METRICS_PORT=9110
     <<: *backend-service
 
@@ -209,6 +231,8 @@ services:
     environment:
       - SERVICE_NAME=performance-review-service
       - NODE_ENV=production
+      - FIELD_KMS_KEY_ID=alias/praesto-field-encryption
+      - FIELD_LEGACY_PLAINTEXT_MATCH=true
       - METRICS_PORT=9112
     <<: *backend-service
 
@@ -218,6 +242,8 @@ services:
     environment:
       - SERVICE_NAME=scheduler-service
       - NODE_ENV=production
+      - FIELD_KMS_KEY_ID=alias/praesto-field-encryption
+      - FIELD_LEGACY_PLAINTEXT_MATCH=true
       # Crons run only where this is "true" — see apps/scheduler-service/src/scheduler.ts
       - SCHEDULER_ENABLED=true
       - METRICS_PORT=9111
