@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { prisma } from "@hrms/db";
+import { protectedNumber } from "@hrms/db/values";
 import { sendEmail, PLATFORM_FROM } from "@hrms/common";
 import { logger } from "@hrms/logger";
 import {
@@ -96,7 +97,11 @@ export async function recordLoginEvent(input: LoginEventInput): Promise<void> {
       loginMethod,
       timestamp,
     },
-    history,
+    history.map((h) => ({
+      ...h,
+      latitude: protectedNumber(h.latitude),
+      longitude: protectedNumber(h.longitude),
+    })),
   );
 
   if (tenantId) {

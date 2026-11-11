@@ -211,7 +211,10 @@ export async function ensureMasterIndexes(): Promise<void> {
           key: { status: 1, createdAt: -1 },
           name: "Lead_status_createdAt_idx",
         },
-        { key: { email: 1, status: 1 }, name: "Lead_email_status_idx" },
+        {
+          key: { email_bidx: 1, status: 1 },
+          name: "Lead_email_bidx_status_idx",
+        },
         { key: { ownerId: 1, status: 1 }, name: "Lead_ownerId_status_idx" },
         { key: { createdAt: -1 }, name: "Lead_createdAt_idx" },
         {
@@ -225,5 +228,61 @@ export async function ensureMasterIndexes(): Promise<void> {
     logger.error("ensureMasterIndexes: failed to create lead indexes", {
       error,
     });
+  }
+
+  // Field encryption: keyed-hash lookups replace the old plaintext unique
+  // indexes on users.username and users.email (those now index ciphertext
+  // and enforce nothing), and one key per (scope, purpose, version).
+  try {
+    await prisma.$runCommandRaw({
+      createIndexes: "users",
+      indexes: [
+        {
+          key: { username_bidx: 1 },
+          name: "User_username_bidx_unique",
+          unique: true,
+          partialFilterExpression: { username_bidx: { $type: "string" } },
+        },
+        {
+          key: { email_bidx: 1 },
+          name: "User_email_bidx_unique",
+          unique: true,
+          partialFilterExpression: { email_bidx: { $type: "string" } },
+        },
+      ],
+    });
+    await prisma.$runCommandRaw({
+      createIndexes: "encryption_keys",
+      indexes: [
+        {
+          key: { scope: 1, purpose: 1, version: 1 },
+          name: "EncryptionKey_scope_purpose_version_key",
+          unique: true,
+        },
+      ],
+    });
+    await prisma.$runCommandRaw({
+      createIndexes: "tenant_join_requests",
+      indexes: [
+        { key: { email_bidx: 1 }, name: "TenantJoinRequest_email_bidx_idx" },
+      ],
+    });
+    await prisma.$runCommandRaw({
+      createIndexes: "pii_migration_status",
+      indexes: [
+        {
+          key: { database: 1, collection: 1, mode: 1 },
+          name: "PiiMigrationStatus_db_collection_mode_key",
+          unique: true,
+        },
+      ],
+    });
+  } catch (error: unknown) {
+    logger.error(
+      "ensureMasterIndexes: failed to create field-encryption indexes",
+      {
+        error,
+      },
+    );
   }
 }

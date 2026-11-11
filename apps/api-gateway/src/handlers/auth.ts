@@ -445,14 +445,13 @@ export async function webAuthnCredentialCheck(req: Request, res: Response) {
         message: "username required",
       });
 
-    const rows = (await prisma.user.aggregateRaw({
-      pipeline: [
-        { $match: { username } },
-        { $project: { _id: 0, webAuthnCredentials: 1 } },
-      ],
-    })) as unknown as any[];
+    // username is encrypted; the lookup goes through its keyed hash.
+    const found = await prisma.user.findFirst({
+      where: { username: String(username) },
+      select: { webAuthnCredentials: true },
+    });
 
-    const creds = rows[0]?.webAuthnCredentials;
+    const creds = found?.webAuthnCredentials;
     const hasCredentials = Array.isArray(creds) && creds.length > 0;
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, { hasCredentials });
   } catch (error: unknown) {
@@ -977,7 +976,8 @@ export async function googleCalendarCallback(req: Request, res: Response) {
 
     await prisma.user.update({
       where: { id: payload.userId },
-      data: { googleCalendarRefreshToken: aesEncrypt(refreshToken) },
+      // Sealed by the field-protection hook.
+      data: { googleCalendarRefreshToken: refreshToken },
     });
 
     return popupResultPage(res, clientUrl, {

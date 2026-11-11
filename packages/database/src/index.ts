@@ -31,9 +31,31 @@ export {
 export { canonicalizeEmail, getEmailDomain } from "./email";
 export {
   sensitiveWritesAllowed,
-  sealUserWriteArgs,
   SensitiveWriteBlockedError,
-} from "./fieldEncryption";
+  FieldProtectionError,
+  isProtectedField,
+  openRawRows,
+  openRawForCurrentDb,
+  openResult,
+  scopeFor,
+  assertRawPipelineSafe,
+} from "./fieldProtection";
+export {
+  FieldKeyStore,
+  FieldKeyUnavailableError,
+  fieldKeyStore,
+  kekProviderFromEnv,
+  setFieldKeyStoreForTest,
+} from "./fieldKeys";
+export { PII_REGISTRY, type FieldRule } from "./piiRegistry";
+export { MASTER_SCOPE } from "./prismaClient";
+export {
+  ensureFieldValidators,
+  ensureAllFieldValidators,
+  validatorFor,
+  MASTER_PROTECTED_MODELS,
+  TENANT_PROTECTED_MODELS,
+} from "./fieldValidators";
 export { redactAuditValue, isSensitiveAuditField } from "./auditMiddleware";
 export { generateUniqueUsername } from "./username";
 export {

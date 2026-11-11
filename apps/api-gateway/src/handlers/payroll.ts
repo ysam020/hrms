@@ -17,6 +17,7 @@ import { Request, Response } from "express";
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
+import { protectedNumber } from "@hrms/db/values";
 import { logger } from "@hrms/logger";
 import {
   apiResponse,
@@ -419,11 +420,12 @@ export async function initiatePayrollRun(req: Request, res: Response) {
       { id: string; emi: number; remaining: number }
     >();
     for (const adv of advances) {
-      if (adv.emiAmount && adv.emiAmount > 0) {
+      const emi = protectedNumber(adv.emiAmount);
+      if (emi && emi > 0) {
         advanceMap.set(adv.userId, {
           id: adv.id,
-          emi: adv.emiAmount,
-          remaining: adv.remainingAmount ?? adv.emiAmount,
+          emi,
+          remaining: protectedNumber(adv.remainingAmount) ?? emi,
         });
       }
     }

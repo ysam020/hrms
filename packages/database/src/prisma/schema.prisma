@@ -163,6 +163,7 @@ model TenantJoinRequest {
   tenantId        String    @db.ObjectId
   userId          String    @db.ObjectId
   email           String // canonicalized email at request time, for admin display/audit
+  email_bidx      String? // keyed hash of email, for exact-match lookup
   domain          String // matched domain at request time, for audit
   // "pending" | "approved" | "rejected"
   status          String    @default("pending")
@@ -198,8 +199,10 @@ model User {
   id                            String    @id @default(auto()) @map("_id") @db.ObjectId
   tenantId                      String?   @db.ObjectId
   username                      String    @unique
+  username_bidx                 String? // keyed hash of username, for exact-match lookup
   password                      String?
   email                         String?   @unique
+  email_bidx                    String? // keyed hash of email, for exact-match lookup
   official_email                String?
   // The candidate's original application email (JobApplication.email),
   // copied over when HR links a hired candidate to this account during
@@ -212,7 +215,7 @@ model User {
   middle_name                   String?
   last_name                     String?
   mobile                        String?
-  dob                           DateTime?
+  dob                           Json? // encrypted (DateTime)
   blood_group                   String?
   qualification                 String?
   role                          String[]
@@ -220,8 +223,8 @@ model User {
   isSuperUser                   Boolean   @default(false)
   wfh                           Boolean   @default(false)
   // WFH home location (set by admin when enabling WFH for this employee)
-  wfhHomeLatitude               Float?
-  wfhHomeLongitude              Float?
+  wfhHomeLatitude               Json? // encrypted (Float)
+  wfhHomeLongitude              Json? // encrypted (Float)
   wfhHomeName                   String? // human-readable address label
   note                          String?
   employeeStatus                String    @default("Active")
@@ -404,7 +407,7 @@ model LeaveApplication {
   days               Float
   status             String    @default("Pending")
   reason             String?
-  sickLeave          Boolean?
+  sickLeave          Json? // encrypted (Boolean)
   medicalCertificate String?
   appliedOn          DateTime?
   approvedById       String?   @db.ObjectId
@@ -533,7 +536,9 @@ model Candidate {
   tenantId             String?   @db.ObjectId
   name                 String
   email                String // normalised: trimmed, lower-case
+  email_bidx           String? // keyed hash of email, for exact-match lookup
   mobile               String? // normalised: +<country code><number>
+  mobile_bidx          String? // keyed hash of mobile, for exact-match lookup
   emailVerifiedAt      DateTime?
   currentLocation      String?
   linkedinUrl          String?
@@ -547,8 +552,8 @@ model Candidate {
 
   applications JobApplication[]
 
-  @@index([email])
-  @@index([mobile])
+  @@index([email_bidx])
+  @@index([mobile_bidx])
   @@map("candidates")
 }
 
@@ -562,6 +567,7 @@ model ApplicationDraft {
   tenantId              String?   @db.ObjectId
   jobOpeningId          String    @db.ObjectId
   email                 String // normalised; recovery looks drafts up by this
+  email_bidx            String? // keyed hash of email, for exact-match lookup
   data                  Json
   // Bumped on every save; a save carrying an older revision is refused so
   // two devices can't silently overwrite each other.
@@ -580,42 +586,44 @@ model ApplicationDraft {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  @@index([jobOpeningId, email, status])
+  @@index([jobOpeningId, email_bidx, status])
   @@map("applicationdrafts")
 }
 
 model JobApplication {
-  id                    String    @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId              String?   @db.ObjectId
-  name                  String?
-  mobile                String?
-  email                 String?
-  aadharNo              String?
-  jobTitleId            String?   @db.ObjectId
-  resume                String?
+  id                         String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId                   String?   @db.ObjectId
+  name                       String?
+  mobile                     String?
+  email                      String?
+  email_bidx                 String? // keyed hash of email, for exact-match lookup
+  aadharNo                   String?
+  jobTitleId                 String?   @db.ObjectId
+  resume                     String?
   // Legacy unstructured pipeline storage — left untouched for existing rows.
   // New code writes ApplicationStageEvent instead (see below).
-  interviews            Json?
-  reason                String?
-  status                String    @default("Applied")
-  resumeScore           Float?
-  aiNotes               String?
+  interviews                 Json?
+  reason                     String?
+  status                     String    @default("Applied")
+  resumeScore                Float?
+  aiNotes                    String?
   // Set when status transitions to Rejected/Hired etc. via updateApplicationStatus.
-  remarks               String?
-  hireSalary            Float?
-  hireJoiningDate       DateTime?
-  hireReferredBy        String?
+  remarks                    String?
+  hireSalary                 Json? // encrypted (Float)
+  hireJoiningDate            DateTime?
+  hireReferredBy             String?
   // Full component breakdown captured at hire time (same shape as
   // SalaryStructure.componentBreakdown) — hireSalary stays as the derived
   // monthly gross (sum of earning components) for display/back-compat.
   // Null for candidates hired before this field existed; consumers must
   // fall back to the old deriveOfferCompensationBreakup(hireSalary) path.
-  hireSalaryComponents  Json?
+  hireSalaryComponents       Json?
   // The company email HR/IT is provisioning for this hire, recorded before
   // the candidate's first login — lets join-request approval match by exact
   // email instead of guessing by name similarity. See updateAssignedOfficialEmail
   // / listHiredCandidateMatches in handlers/{recruitment,tenant}.ts.
-  assignedOfficialEmail String?
+  assignedOfficialEmail      String?
+  assignedOfficialEmail_bidx String? // keyed hash of assignedOfficialEmail, for exact-match lookup
 
   // Set when an existing employee applies internally, rather than being
   // re-entered as an external candidate.
@@ -706,7 +714,7 @@ model Offer {
   version       Int       @default(1)
   designation   String?
   department    String?
-  offeredCTC    Float?
+  offeredCTC    Json? // encrypted (Float)
   joiningDate   DateTime?
   status        String    @default("Draft") // Draft|Sent|Negotiating|Accepted|Declined|Withdrawn|Expired
   sentAt        DateTime?
@@ -760,7 +768,7 @@ model Resignation {
   // never configure tenure-based bands.
   noticePeriodDays   Int?
   noticePeriodWaived Boolean   @default(false)
-  buyoutAmount       Float?
+  buyoutAmount       Json? // encrypted (Float)
   // Garden leave — relieved from active duty immediately, distinct from
   // lastWorkingDay (which payroll still runs through).
   relievedFromDutyOn DateTime?
@@ -875,11 +883,11 @@ model FnfSettlement {
   resignationId            String    @unique @db.ObjectId
   userId                   String    @db.ObjectId
   lineItems                Json // [{ label, type: "earning"|"deduction", amount }]
-  leaveEncashmentAmount    Float     @default(0)
-  noticeShortfallDeduction Float     @default(0)
-  grossPayable             Float
-  totalDeductions          Float
-  netPayable               Float
+  leaveEncashmentAmount    Json? // encrypted (Float, default 0)
+  noticeShortfallDeduction Json? // encrypted (Float, default 0)
+  grossPayable             Json // encrypted (Float)
+  totalDeductions          Json // encrypted (Float)
+  netPayable               Json // encrypted (Float)
   status                   String    @default("draft") // draft | approved | disbursed
   approvedBy               String?   @db.ObjectId
   approvedAt               DateTime?
@@ -897,26 +905,26 @@ model SalaryStructure {
   id               String    @id @default(auto()) @map("_id") @db.ObjectId
   tenantId         String?   @db.ObjectId
   userId           String    @db.ObjectId
-  grossSalary      Float
+  grossSalary      Json // encrypted (Float)
   month            Int
   year             Int
-  basicPay         Float?
-  hra              Float?
-  conveyance       Float?
-  incentive        Float?
-  pf               Float?
-  esi              Float?
-  pt               Float?
-  deductions       Float?
+  basicPay         Json? // encrypted (Float)
+  hra              Json? // encrypted (Float)
+  conveyance       Json? // encrypted (Float)
+  incentive        Json? // encrypted (Float)
+  pf               Json? // encrypted (Float)
+  esi              Json? // encrypted (Float)
+  pt               Json? // encrypted (Float)
+  deductions       Json? // encrypted (Float)
   // SalaryAdvance EMI deducted this month, if any — broken out of
   // `deductions` so payslips can itemize it instead of folding it into a
   // generic total (mirrors PayrollLineItem.advanceDeduction).
-  advanceDeduction Float?
+  advanceDeduction Json? // encrypted (Float)
   // Income tax (TDS) withheld this month — see IncomeTaxSlab/TaxDeclaration
   // and calcMonthlyTds() in apps/api-gateway/src/utils/tdsCalc.ts.
-  tds              Float?
-  grossEarnings    Float?
-  netPayable       Float?
+  tds              Json? // encrypted (Float)
+  grossEarnings    Json? // encrypted (Float)
+  netPayable       Json? // encrypted (Float)
   createdAt        DateTime? @default(now())
   updatedAt        DateTime? @updatedAt
 
@@ -1014,8 +1022,8 @@ model TaxDeclaration {
 
   // HRA exemption inputs — the exemption itself is computed (see
   // calcHraExemption in tdsCalc.ts), not directly declared.
-  monthlyRent Float?
-  isMetroCity Boolean?
+  monthlyRent Json? // encrypted (Float)
+  isMetroCity Json? // encrypted (Boolean)
 
   // [{code, label, declaredAmount, proofAmount}] — codes: SEC80C,
   // SEC80D_SELF, SEC80D_PARENTS, HOME_LOAN_INTEREST, NPS_80CCD1B, OTHER.
@@ -1187,20 +1195,21 @@ model Message {
 // ─── Audit Log ────────────────────────────────────────────────────────────────
 
 model AuditLog {
-  id          String    @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId    String?   @db.ObjectId
-  userId      String?   @db.ObjectId
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId      String?   @db.ObjectId
+  userId        String?   @db.ObjectId
   // Denormalized at write time — survives the acting user later being
   // deleted/renamed, and avoids a join every time the log is displayed.
-  username    String?
-  action      String
-  entityType  String
-  oldValue    Json?
-  newValue    Json?
-  description String    @default("")
-  ipAddress   String?
-  userAgent   String?
-  timestamp   DateTime? @default(now())
+  username      String?
+  username_bidx String? // keyed hash of username, for exact-match lookup
+  action        String
+  entityType    String
+  oldValue      Json?
+  newValue      Json?
+  description   String    @default("")
+  ipAddress     String?
+  userAgent     String?
+  timestamp     DateTime? @default(now())
 
   @@index([tenantId, timestamp])
   @@index([tenantId, userId, timestamp])
@@ -1209,7 +1218,7 @@ model AuditLog {
   // tenantId filter, so the indexes those queries can use must not lead with it.
   @@index([timestamp, id])
   @@index([entityType, timestamp])
-  @@index([username, timestamp])
+  @@index([username_bidx, timestamp])
   @@map("auditlogs")
 }
 
@@ -1505,8 +1514,8 @@ model LoginEvent {
   ip                String
   country           String?
   city              String?
-  latitude          Float?
-  longitude         Float?
+  latitude          Json? // encrypted (Float)
+  longitude         Json? // encrypted (Float)
   userAgent         String
   deviceFingerprint String
   // "GOOGLE_OAUTH" | "WEBAUTHN"
@@ -1569,19 +1578,19 @@ model PayrollLineItem {
   tenantId           String? @db.ObjectId
   payrollRunId       String  @db.ObjectId
   userId             String  @db.ObjectId
-  grossSalary        Float
-  basicPay           Float   @default(0)
-  hra                Float   @default(0)
-  conveyance         Float   @default(0)
-  incentive          Float   @default(0)
-  pf                 Float   @default(0)
-  esi                Float   @default(0)
-  pt                 Float   @default(0)
-  advanceDeduction   Float   @default(0) // SalaryAdvance EMI deducted this month
-  tds                Float   @default(0) // Income tax (TDS) — see IncomeTaxSlab/TaxDeclaration
-  otherDeductions    Float   @default(0)
-  totalDeductions    Float   @default(0)
-  netPayable         Float
+  grossSalary        Json // encrypted (Float)
+  basicPay           Json? // encrypted (Float, default 0)
+  hra                Json? // encrypted (Float, default 0)
+  conveyance         Json? // encrypted (Float, default 0)
+  incentive          Json? // encrypted (Float, default 0)
+  pf                 Json? // encrypted (Float, default 0)
+  esi                Json? // encrypted (Float, default 0)
+  pt                 Json? // encrypted (Float, default 0)
+  advanceDeduction   Json? // SalaryAdvance EMI deducted this month // encrypted (Float, default 0)
+  tds                Json? // Income tax (TDS) — see IncomeTaxSlab/TaxDeclaration // encrypted (Float, default 0)
+  otherDeductions    Json? // encrypted (Float, default 0)
+  totalDeductions    Json? // encrypted (Float, default 0)
+  netPayable         Json // encrypted (Float)
   payslipId          String? @db.ObjectId // reference to SalaryStructure once generated
   // Same shape/fallback rule as SalaryStructure.componentBreakdown.
   componentBreakdown Json?
@@ -1618,16 +1627,16 @@ model SalaryAdvance {
   id              String    @id @default(auto()) @map("_id") @db.ObjectId
   tenantId        String?   @db.ObjectId
   userId          String    @db.ObjectId
-  amount          Float
+  amount          Json // encrypted (Float)
   reason          String?
   // Pending | Approved | Rejected | Repaying | Repaid
   status          String    @default("Pending")
   approvedBy      String?   @db.ObjectId
   approvedAt      DateTime?
-  emiAmount       Float? // per-month deduction
+  emiAmount       Json? // per-month deduction // encrypted (Float)
   emiMonths       Int? // total repayment months
   paidMonths      Int       @default(0)
-  remainingAmount Float?
+  remainingAmount Json? // encrypted (Float)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -1670,12 +1679,12 @@ model PerformanceReview {
   // draft -> self_assessment_submitted -> manager_review_submitted -> approved | rejected
   status                  String    @default("draft")
   selfComments            String?
-  selfRating              Float?
+  selfRating              Json? // encrypted (Float)
   managerComments         String?
-  managerRating           Float?
-  overallRating           Float?
+  managerRating           Json? // encrypted (Float)
+  overallRating           Json? // encrypted (Float)
   // HR's recommended comp change, proposed alongside the manager review
-  recommendedIncrementPct Float?
+  recommendedIncrementPct Json? // encrypted (Float)
   effectiveFrom           DateTime?
   // Populated once the final-approval side-effect (api-gateway) creates the
   // new SalaryStructure — cross-service reference, no Prisma @relation.
@@ -2238,6 +2247,7 @@ model Lead {
   name            String
   // Trimmed and lower-cased.
   email           String
+  email_bidx      String? // keyed hash of email, for exact-match lookup
   // E.164, e.g. +919876543210. Optional.
   phone           String?
   companyName     String
@@ -2287,7 +2297,7 @@ model Lead {
   updatedAt       DateTime   @updatedAt
 
   @@index([status, createdAt])
-  @@index([email, status])
+  @@index([email_bidx, status])
   @@index([ownerId, status])
   @@map("leads")
 }
@@ -2299,4 +2309,39 @@ type LeadNote {
   authorId  String?  @db.ObjectId
   body      String
   createdAt DateTime
+}
+
+// ─── Field encryption ─────────────────────────────────────────────────────────
+// Master DB. KMS-wrapped data keys, one series per (scope, purpose): scope is
+// "master" or a tenant's database name; purpose is "enc" or "bidx". Only the
+// wrapped form is stored; the KMS key never leaves KMS. Unique index on
+// (scope, purpose, version) is created by ensureMasterIndexes.
+model EncryptionKey {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  scope      String
+  purpose    String
+  version    Int
+  wrappedKey String
+  // "env" in development; the KMS key ARN in production.
+  kekId      String
+  // active | retired (still opens old values) | destroyed
+  status     String   @default("active")
+  createdAt  DateTime @default(now())
+
+  @@map("encryption_keys")
+}
+
+// Master DB. Progress of the field-encryption migration, one row per
+// (database, collection). Counts only; never a value.
+model PiiMigrationStatus {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  database   String
+  collection String
+  mode       String
+  lastId     String?
+  complete   Boolean  @default(false)
+  counts     Json
+  updatedAt  DateTime @updatedAt
+
+  @@map("pii_migration_status")
 }

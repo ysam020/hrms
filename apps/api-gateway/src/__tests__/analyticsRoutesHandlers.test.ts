@@ -185,12 +185,15 @@ describe("getEmployeeStatusDistribution", () => {
 
 describe("getAgeDistribution", () => {
   it("buckets users into the correct age ranges", async () => {
-    // aggregateRaw returns MongoDB $bucket output: _id is the bucket boundary
-    (prisma.user as any).aggregateRaw = jest.fn().mockResolvedValue([
-      { _id: 0, count: 1 }, // <25
-      { _id: 25, count: 2 }, // 25-34
-      { _id: 35, count: 1 }, // 35-44
-      { _id: "55+", count: 1 }, // 55+ (default bucket)
+    // dob is encrypted: the handler reads the (opened) dates and buckets them.
+    const y = new Date().getUTCFullYear();
+    const born = (age: number) => ({ dob: new Date(Date.UTC(y - age, 5, 1)) });
+    mockUserFindMany.mockResolvedValueOnce([
+      born(22),
+      born(25),
+      born(34),
+      born(40),
+      born(60),
     ]);
     const res = makeRes();
     await getAgeDistribution(makeReq(), res);
@@ -204,7 +207,7 @@ describe("getAgeDistribution", () => {
   });
 
   it("returns all buckets with zero count when aggregateRaw returns empty", async () => {
-    (prisma.user as any).aggregateRaw = jest.fn().mockResolvedValue([]);
+    mockUserFindMany.mockResolvedValueOnce([]);
     const res = makeRes();
     await getAgeDistribution(makeReq(), res);
     const { data } = mockApiResponse.mock.calls[0][2];
@@ -213,9 +216,7 @@ describe("getAgeDistribution", () => {
   });
 
   it("returns 500 on DB error", async () => {
-    (prisma.user as any).aggregateRaw = jest
-      .fn()
-      .mockRejectedValue(new Error("DB error"));
+    mockUserFindMany.mockRejectedValueOnce(new Error("DB error"));
     const res = makeRes();
     await getAgeDistribution(makeReq(), res);
     expect(mockApiResponse).toHaveBeenCalledWith(
@@ -458,13 +459,24 @@ describe("getHiringManagerPerformance", () => {
 // ─── getSalaryBands ───────────────────────────────────────────────────────────
 
 describe("getSalaryBands", () => {
-  it("maps aggregateRaw result with label lookup", async () => {
-    const aggregateRawMock = jest.fn().mockResolvedValue([
-      { _id: 0, count: 10, avgSalary: 15000 },
-      { _id: 20000, count: 20, avgSalary: 30000 },
-      { _id: "100K+", count: 5, avgSalary: 150000 },
-    ]);
-    (prisma as any).salaryStructure.aggregateRaw = aggregateRawMock;
+  it("buckets each employee's latest grossEarnings with the label lookup", async () => {
+    // grossEarnings is encrypted: rows come back opened, newest first per user.
+    const rows = [
+      ...Array.from({ length: 10 }, (_, i) => ({
+        userId: `a${i}`,
+        grossEarnings: 15000,
+      })),
+      ...Array.from({ length: 20 }, (_, i) => ({
+        userId: `b${i}`,
+        grossEarnings: 30000,
+      })),
+      ...Array.from({ length: 5 }, (_, i) => ({
+        userId: `c${i}`,
+        grossEarnings: 150000,
+      })),
+      { userId: "a0", grossEarnings: 99999999 }, // older row for a0: ignored
+    ];
+    mockStructureFindMany.mockResolvedValueOnce(rows);
 
     const res = makeRes();
     await getSalaryBands(makeReq(), res);
@@ -477,10 +489,8 @@ describe("getSalaryBands", () => {
     expect(high.count).toBe(5);
   });
 
-  it("returns 500 when aggregateRaw throws", async () => {
-    (prisma as any).salaryStructure.aggregateRaw = jest
-      .fn()
-      .mockRejectedValue(new Error("DB error"));
+  it("returns 500 when the query throws", async () => {
+    mockStructureFindMany.mockRejectedValueOnce(new Error("DB error"));
     const res = makeRes();
     await getSalaryBands(makeReq(), res);
     expect(mockApiResponse).toHaveBeenCalledWith(

@@ -30,6 +30,7 @@ jest.mock("@hrms/db", () => {
       aggregateRaw: jest.fn(),
       update: jest.fn(),
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
     },
     // Read by getProfile only when the token carries a tenant.
     tenant: { findUnique: jest.fn().mockResolvedValue(null) },
@@ -476,9 +477,10 @@ describe("authHandlers", () => {
     });
 
     it("returns hasCredentials=true when user has credentials", async () => {
-      mockAggregateRaw.mockResolvedValue([
-        { webAuthnCredentials: [{ credentialID: "cred-1" }] },
-      ]);
+      // username is encrypted: looked up by Prisma (its keyed hash), not $match.
+      (prisma.user.findFirst as jest.Mock).mockResolvedValue({
+        webAuthnCredentials: [{ credentialID: "cred-1" }],
+      });
       const res = makeRes();
       await webAuthnCredentialCheck(
         makeReq({ body: { username: "alice" } }),
@@ -492,7 +494,9 @@ describe("authHandlers", () => {
     });
 
     it("returns hasCredentials=false when user has no credentials", async () => {
-      mockAggregateRaw.mockResolvedValue([{ webAuthnCredentials: [] }]);
+      (prisma.user.findFirst as jest.Mock).mockResolvedValue({
+        webAuthnCredentials: [],
+      });
       const res = makeRes();
       await webAuthnCredentialCheck(
         makeReq({ body: { username: "alice" } }),
@@ -995,7 +999,8 @@ describe("authHandlers", () => {
       expect(exchangeCalendarCode).toHaveBeenCalledWith("auth-code");
       expect(mockUserUpdate).toHaveBeenCalledWith({
         where: { id: "user-1" },
-        data: { googleCalendarRefreshToken: "enc:refresh-token-abc" },
+        // The plain token: the field-protection hook seals it on write.
+        data: { googleCalendarRefreshToken: "refresh-token-abc" },
       });
       expect(res.setHeader).toHaveBeenCalledWith(
         "Cross-Origin-Opener-Policy",

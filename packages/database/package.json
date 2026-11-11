@@ -11,6 +11,10 @@
     "./testing": {
       "types": "./src/testing/fakePrismaClient.ts",
       "default": "./dist/testing/fakePrismaClient.js"
+    },
+    "./values": {
+      "types": "./src/protectedValues.ts",
+      "default": "./dist/protectedValues.js"
     }
   },
   "typesVersions": {
@@ -31,6 +35,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
+    "@aws-sdk/client-kms": "3.1024.0",
     "@hrms/crypto": "workspace:*",
     "@prisma/client": "^5.22.0",
     "prisma": "^5.22.0"

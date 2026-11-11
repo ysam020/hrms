@@ -10,7 +10,10 @@ import {
   runWithTenant,
   recordAuditEntry,
   AuditActor,
+  ensureFieldValidators,
+  TENANT_PROTECTED_MODELS,
 } from "@hrms/db";
+import { protectedNumber } from "@hrms/db/values";
 import { randomBytes, createHmac } from "crypto";
 import jwt from "jsonwebtoken";
 import { AuthRequest } from "../middleware/authenticate";
@@ -461,6 +464,8 @@ async function buildTenant(
         // $runCommandRaw bypasses attachAuditLogging (no Prisma model/action
         // for the middleware to key off), so record it manually.
         recordAuditEntry(tenantClient as any, "_init", "create", null, initDoc);
+        // Protected fields in a new database only ever accept sealed values.
+        await ensureFieldValidators(tenantClient, TENANT_PROTECTED_MODELS);
         // Seed the initial TenantSettings version so services always have a DB record.
         // workWeekPattern defaults to Mon-Fri if the signup step was skipped —
         // never blocks tenant creation.
@@ -1407,7 +1412,8 @@ export async function approveJoinRequest(req: AuthRequest, res: Response) {
 
     let jobApplication: {
       email: string | null;
-      hireSalary: number | null;
+      // Protected field: Json in the schema, a number once opened.
+      hireSalary: unknown;
       hireJoiningDate: Date | null;
       hireSalaryComponents: unknown;
     } | null = null;
@@ -1539,7 +1545,7 @@ export async function approveJoinRequest(req: AuthRequest, res: Response) {
       salarySeeded = await seedSalaryFromHire(
         request.userId,
         tenantId,
-        jobApplication.hireSalary,
+        protectedNumber(jobApplication.hireSalary) ?? 0,
         jobApplication.hireJoiningDate,
         jobApplication.hireSalaryComponents,
       );

@@ -1365,46 +1365,79 @@ describe("employeeHandlers", () => {
   });
 
   describe("viewAllKycs", () => {
-    it("returns paginated KYC list", async () => {
-      mockUserAggregateRaw
-        .mockResolvedValueOnce([{ username: "john", kyc_approval: "Approved" }])
-        .mockResolvedValueOnce([{ total: 1 }]);
+    // Names are encrypted, so the list is a Prisma query (search and name
+    // order are evaluated by the field-protection hook), not a raw pipeline.
+    const findMany = () => (prisma as any).user.findMany as jest.Mock;
+    const count = () => (prisma as any).user.count as jest.Mock;
+
+    it("returns paginated KYC list in the raw-aggregation shape", async () => {
+      findMany().mockResolvedValueOnce([
+        {
+          id: "u1",
+          username: "john",
+          kyc_approval: "Approved",
+          kyc_date: new Date("2026-01-02T00:00:00.000Z"),
+          middle_name: null,
+        },
+      ]);
+      count().mockResolvedValueOnce(1);
       const res = makeRes();
       await viewAllKycs(makeReq({ query: { page: "1", limit: "10" } }), res);
-      expect(mockApiResponse).toHaveBeenCalledWith(
-        res,
-        RESPONSE_STATUS.SUCCESS,
+      const body = mockApiResponse.mock.calls[0][2];
+      expect(mockApiResponse.mock.calls[0][1]).toBe(RESPONSE_STATUS.SUCCESS);
+      expect(body.data.pagination).toEqual(
+        expect.objectContaining({ totalCount: 1, totalPages: 1 }),
+      );
+      expect(body.data.kycs[0]).toEqual({
+        id: "u1",
+        username: "john",
+        kyc_approval: "Approved",
+        kyc_date: { $date: "2026-01-02T00:00:00.000Z" },
+      });
+    });
+
+    it("returns totalCount 0 when nothing matches", async () => {
+      findMany().mockResolvedValueOnce([]);
+      count().mockResolvedValueOnce(0);
+      const res = makeRes();
+      await viewAllKycs(makeReq(), res);
+      expect(mockApiResponse.mock.calls[0][2].data.pagination.totalCount).toBe(
+        0,
+      );
+    });
+
+    it("caps limit at 100 and orders by name", async () => {
+      findMany().mockResolvedValueOnce([]);
+      count().mockResolvedValueOnce(0);
+      await viewAllKycs(makeReq({ query: { limit: "500" } }), makeRes());
+      const args = findMany().mock.calls.at(-1)[0];
+      expect(args.take).toBe(100);
+      expect(args.orderBy).toEqual([
+        { first_name: "asc" },
+        { last_name: "asc" },
+      ]);
+      expect(args.where).toEqual(
         expect.objectContaining({
-          data: expect.objectContaining({
-            pagination: expect.objectContaining({
-              totalCount: 1,
-              totalPages: 1,
-            }),
-          }),
+          employeeStatus: "Active",
+          tenantId: expect.any(String),
         }),
       );
     });
 
-    it("returns totalCount 0 when count pipeline returns empty array", async () => {
-      mockUserAggregateRaw.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
-      const res = makeRes();
-      await viewAllKycs(makeReq(), res);
-      const call = mockApiResponse.mock.calls[0];
-      expect(call[2].data.pagination.totalCount).toBe(0);
-    });
-
-    it("caps limit at 100", async () => {
-      mockUserAggregateRaw.mockResolvedValue([]);
-      const res = makeRes();
-      await viewAllKycs(makeReq({ query: { limit: "500" } }), res);
-      // Second aggregateRaw call is for count; first is for rows
-      const pipeline = mockUserAggregateRaw.mock.calls[0][0].pipeline;
-      const limitStage = pipeline.find((s: any) => s.$limit !== undefined);
-      expect(limitStage.$limit).toBe(100);
+    it("searches names, username, department and designation case-insensitively", async () => {
+      findMany().mockResolvedValueOnce([]);
+      count().mockResolvedValueOnce(0);
+      await viewAllKycs(makeReq({ query: { search: "asha" } }), makeRes());
+      const { where } = findMany().mock.calls.at(-1)[0];
+      expect(where.OR).toHaveLength(5);
+      expect(where.OR[1]).toEqual({
+        first_name: { contains: "asha", mode: "insensitive" },
+      });
     });
 
     it("returns INTERNAL_SERVER_ERROR on DB error", async () => {
-      mockUserAggregateRaw.mockRejectedValue(new Error("DB error"));
+      findMany().mockRejectedValueOnce(new Error("DB error"));
+      count().mockResolvedValueOnce(0);
       const res = makeRes();
       await viewAllKycs(makeReq(), res);
       expect(mockApiResponse).toHaveBeenCalledWith(
@@ -1418,7 +1451,7 @@ describe("employeeHandlers", () => {
       mockGetTenantId.mockReturnValueOnce(null);
       const res = makeRes();
       await viewAllKycs(makeReq(), res);
-      expect(mockUserAggregateRaw).not.toHaveBeenCalled();
+      expect(findMany()).not.toHaveBeenCalled();
       expect(mockApiResponse).toHaveBeenCalledWith(
         res,
         RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
@@ -1428,18 +1461,18 @@ describe("employeeHandlers", () => {
 
     it("self-scopes to the caller's own record when not privileged", async () => {
       mockIsPrivileged.mockResolvedValueOnce(false);
-      mockUserAggregateRaw
-        .mockResolvedValueOnce([
-          { username: "user-1", kyc_approval: "Approved" },
-        ])
-        .mockResolvedValueOnce([{ total: 1 }]);
-      const res = makeRes();
-      await viewAllKycs(makeReq({ query: { search: "someone-else" } }), res);
-      const pipeline = mockUserAggregateRaw.mock.calls[0][0].pipeline;
-      const match = pipeline.find((s: any) => s.$match)?.$match;
-      expect(match._id).toEqual({ $oid: "user-1" });
-      // search is ignored entirely once self-scoped — no $or clause added
-      expect(match.$or).toBeUndefined();
+      findMany().mockResolvedValueOnce([
+        { id: "user-1", username: "user-1", kyc_approval: "Approved" },
+      ]);
+      count().mockResolvedValueOnce(1);
+      await viewAllKycs(
+        makeReq({ query: { search: "someone-else" } }),
+        makeRes(),
+      );
+      const { where } = findMany().mock.calls.at(-1)[0];
+      expect(where.id).toBe("user-1");
+      // search is ignored entirely once self-scoped
+      expect(where.OR).toBeUndefined();
     });
   });
 

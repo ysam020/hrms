@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
+import { protectedNumber, protectedDate } from "@hrms/db/values";
 import { logger } from "@hrms/logger";
 import { apiResponse, RESPONSE_STATUS } from "@hrms/common";
 import { cacheManager } from "@hrms/cache";
@@ -154,27 +155,36 @@ export async function getAgeDistribution(_req: Request, res: Response) {
         message: "Internal Server Error",
       });
     }
-    const tenantIdMatch = { tenantId: { $oid: tenantId } };
-    const bucketResult = await (prisma.user as any).aggregateRaw({
-      pipeline: [
-        { $match: { ...tenantIdMatch, dob: { $ne: null } } },
-        {
-          $addFields: {
-            ageYears: {
-              $subtract: [{ $year: "$$NOW" }, { $year: "$dob" }],
-            },
-          },
-        },
-        {
-          $bucket: {
-            groupBy: "$ageYears",
-            boundaries: [0, 25, 35, 45, 55],
-            default: "55+",
-            output: { count: { $sum: 1 } },
-          },
-        },
-      ],
+    // dob is encrypted: bucket in memory, same boundaries as before
+    // (year difference, as $year($$NOW) - $year(dob) computed it).
+    const withDob = await prisma.user.findMany({
+      where: { tenantId, dob: { not: null } },
+      select: { dob: true },
     });
+    const nowYear = new Date().getUTCFullYear();
+    const bucketCounts = new Map<string | number, number>();
+    for (const u of withDob) {
+      const d = protectedDate(u.dob);
+      if (!d) continue;
+      const age = nowYear - d.getUTCFullYear();
+      const b =
+        age < 0
+          ? "55+"
+          : age < 25
+            ? 0
+            : age < 35
+              ? 25
+              : age < 45
+                ? 35
+                : age < 55
+                  ? 45
+                  : "55+";
+      bucketCounts.set(b, (bucketCounts.get(b) ?? 0) + 1);
+    }
+    const bucketResult = [...bucketCounts].map(([_id, count]) => ({
+      _id,
+      count,
+    }));
     const ageLabel: Record<string | number, string> = {
       0: "<25",
       25: "25-34",
@@ -1065,29 +1075,46 @@ export async function getSalaryBands(_req: Request, res: Response) {
         message: "Internal Server Error",
       });
     }
-    const bucketResult = await (prisma as any).salaryStructure.aggregateRaw({
-      pipeline: [
-        { $sort: { userId: 1, year: -1, month: -1 } },
-        {
-          $group: {
-            _id: "$userId",
-            grossEarnings: { $first: "$grossEarnings" },
-          },
-        },
-        { $match: { grossEarnings: { $ne: null } } },
-        {
-          $bucket: {
-            groupBy: "$grossEarnings",
-            boundaries: [0, 20000, 40000, 60000, 100000],
-            default: "100K+",
-            output: {
-              count: { $sum: 1 },
-              avgSalary: { $avg: "$grossEarnings" },
-            },
-          },
-        },
-      ],
+    // grossEarnings is encrypted: take each user's latest row and bucket
+    // in memory, with the same boundaries and output as the old $bucket.
+    const structures = await (prisma as any).salaryStructure.findMany({
+      orderBy: [{ userId: "asc" }, { year: "desc" }, { month: "desc" }],
+      select: { userId: true, grossEarnings: true },
     });
+    const latest = new Map<string, number | null>();
+    for (const s of structures as {
+      userId: string;
+      grossEarnings: unknown;
+    }[]) {
+      if (!latest.has(s.userId))
+        latest.set(s.userId, protectedNumber(s.grossEarnings));
+    }
+    const bands = new Map<string, { count: number; total: number }>();
+    for (const g of latest.values()) {
+      if (g === null) continue;
+      const key =
+        g < 0 || g >= 100000
+          ? "100K+"
+          : g < 20000
+            ? "0"
+            : g < 40000
+              ? "20000"
+              : g < 60000
+                ? "40000"
+                : "60000";
+      const band = bands.get(key) ?? { count: 0, total: 0 };
+      band.count++;
+      band.total += g;
+      bands.set(key, band);
+    }
+    const order = ["0", "20000", "40000", "60000", "100K+"];
+    const bucketResult = order
+      .filter((k) => bands.has(k))
+      .map((k) => ({
+        _id: k === "100K+" ? k : Number(k),
+        count: bands.get(k)!.count,
+        avgSalary: bands.get(k)!.total / bands.get(k)!.count,
+      }));
     const labelMap: Record<string, string> = {
       "0": "<20K",
       "20000": "20-40K",

@@ -29,3 +29,9 @@ process.env.REFRESH_TOKEN = "it-refresh-secret";
 process.env.ACCOUNT_CHECK_TIMEOUT_MS =
   process.env.ACCOUNT_CHECK_TIMEOUT_MS || "1500";
 process.env.NODE_ENV = "test";
+// Field encryption: a throwaway key-encryption key, never used elsewhere.
+process.env.FIELD_KEK_HEX = "4".repeat(64);
+process.env.CRYPTO_ENCRYPTION_KEY =
+  process.env.CRYPTO_ENCRYPTION_KEY || "c".repeat(64);
+delete process.env.FIELD_KMS_KEY_ID;
+delete process.env.FIELD_KMS_ENDPOINT;

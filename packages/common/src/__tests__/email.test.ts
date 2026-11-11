@@ -37,7 +37,7 @@ describe("sendEmail", () => {
         from: '"Praesto" <noreply@praesto.in>',
       }),
     );
-    expect(logger.info).toHaveBeenCalledWith("Email sent to a@b.com");
+    expect(logger.info).toHaveBeenCalledWith("Email sent");
   });
 
   it("passes replyTo and attachments through to Resend", async () => {

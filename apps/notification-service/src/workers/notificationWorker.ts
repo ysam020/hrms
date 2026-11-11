@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { Worker } from "bullmq";
+import { openTransient } from "@hrms/crypto";
 import {
   prisma,
   prismaWithTenant,
@@ -261,6 +262,22 @@ export function startNotificationWorker(): Worker[] {
   ];
 }
 
+/**
+ * notify() seals a job's text and targets (BullMQ stores job data in Redis).
+ * The worker reads an opened view; the job itself, which failed-job handling
+ * copies to the dead-letter queue, stays sealed.
+ */
+function openedJob(job: Job<NotificationJobData>): Job<NotificationJobData> {
+  const sealed = (job.data as { sealed?: string }).sealed;
+  if (!sealed) return job;
+  const data = {
+    ...openTransient<NotificationJobData>(sealed),
+    tenantId: job.data.tenantId,
+    requestId: job.data.requestId,
+  };
+  return Object.create(job, { data: { value: data, enumerable: true } });
+}
+
 function startQueueWorker(queueName: string): Worker {
   const worker = new Worker<NotificationJobData>(
     queueName,
@@ -270,8 +287,10 @@ function startQueueWorker(queueName: string): Worker {
       // can be traced back to the HTTP/gRPC request that enqueued the job —
       // closing the last leg of HTTP -> gRPC -> queue propagation.
       job.data.requestId
-        ? requestIdStorage.run(job.data.requestId, () => processJob(job))
-        : processJob(job),
+        ? requestIdStorage.run(job.data.requestId, () =>
+            processJob(openedJob(job)),
+          )
+        : processJob(openedJob(job)),
     {
       connection: getBullMQConnection(),
       concurrency: 10,

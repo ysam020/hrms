@@ -646,18 +646,22 @@ export async function getTenant(req: Request, res: Response) {
             take: 25,
           })
         : null,
-      prismaWithTenant.auditLog.aggregateRaw({
-        pipeline: [
-          {
-            $match: {
-              entityType: AUDIT_ENTITY,
-              "newValue.targetTenantId": id,
-            },
-          },
-          { $sort: { timestamp: -1 } },
-          { $limit: 20 },
-        ],
-      }),
+      // newValue is encrypted: filter on its target in memory.
+      prismaWithTenant.auditLog
+        .findMany({
+          where: { entityType: AUDIT_ENTITY },
+          orderBy: { timestamp: "desc" },
+          take: 2000,
+        })
+        .then((rows) =>
+          rows
+            .filter(
+              (r) =>
+                (r.newValue as { targetTenantId?: string } | null)
+                  ?.targetTenantId === id,
+            )
+            .slice(0, 20),
+        ),
     ]);
 
     const ownerUser = owner

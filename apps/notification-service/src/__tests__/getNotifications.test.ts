@@ -14,6 +14,8 @@ jest.mock("@hrms/db", () => {
     prisma: _db,
     prismaWithTenant: _db,
     getTenantId: jest.fn().mockReturnValue("t1"),
+    // Opens the $lookup'ed notification text in place; identity here.
+    openRawForCurrentDb: jest.fn(async (_m: string, rows: unknown) => rows),
   };
 });
 

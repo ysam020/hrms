@@ -97,7 +97,7 @@ describe("googleCalendar service (per-user OAuth)", () => {
   });
 
   describe("createInterviewMeetEvent", () => {
-    it("decrypts the refresh token, refreshes an access token, and creates a Calendar event with a Meet link", async () => {
+    it("uses the refresh token as opened by the field-protection hook, refreshes an access token, and creates a Calendar event with a Meet link", async () => {
       (global.fetch as jest.Mock).mockResolvedValue({
         ok: true,
         json: async () => ({ access_token: "fresh-access-token" }),
@@ -117,7 +117,10 @@ describe("googleCalendar service (per-user OAuth)", () => {
         attendeeEmails: ["jordan@candidate.example"],
       });
 
-      expect(aesDecrypt).toHaveBeenCalledWith("enc-rt");
+      // Already opened by the database layer; no second decryption here.
+      expect(aesDecrypt).not.toHaveBeenCalled();
+      const body = String((global.fetch as jest.Mock).mock.calls[0][1].body);
+      expect(body).toContain("refresh_token=enc-rt");
       expect(mockSetCredentials).toHaveBeenCalledWith({
         access_token: "fresh-access-token",
       });

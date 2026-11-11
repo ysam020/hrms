@@ -1,5 +1,6 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
 import { prismaWithTenant as prisma, getTenantId } from "@hrms/db";
+import { protectedNumber } from "@hrms/db/values";
 import { logger } from "@hrms/logger";
 import { cacheManager } from "@hrms/cache";
 import { MESSAGES } from "../constants/messages";
@@ -44,7 +45,7 @@ export const getSalaryAnalytics = async (
       const key = `${run.year}-${String(run.month).padStart(2, "0")}`;
       totalByPeriod.set(
         key,
-        (totalByPeriod.get(key) ?? 0) + (li.netPayable ?? 0),
+        (totalByPeriod.get(key) ?? 0) + (protectedNumber(li.netPayable) ?? 0),
       );
     }
 

@@ -1,5 +1,5 @@
 import { sendUnaryData, ServerUnaryCall, status } from "@grpc/grpc-js";
-import { prismaWithTenant as prisma } from "@hrms/db";
+import { prismaWithTenant as prisma, openRawForCurrentDb } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { MESSAGES } from "../constants/messages";
 
@@ -87,6 +87,11 @@ export const getNotifications = async (
       }),
     ]);
 
+    // Notification text is encrypted; the $lookup returns it sealed.
+    await openRawForCurrentDb(
+      "Notification",
+      rows.map((r) => r.n).filter(Boolean),
+    );
     const data = rows.map((r) => ({
       id: oidString(r._id),
       title: r.n?.title || "",

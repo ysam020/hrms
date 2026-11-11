@@ -20,6 +20,11 @@ jest.mock("../queryTiming", () => ({ attachQueryTiming: jest.fn() }));
 jest.mock("../auditMiddleware", () => ({
   attachAuditLogging: (...args: unknown[]) => mockAttachAuditLogging(...args),
 }));
+const mockAttachFieldProtection = jest.fn();
+jest.mock("../fieldProtection", () => ({
+  attachFieldProtection: (...args: unknown[]) =>
+    mockAttachFieldProtection(...args),
+}));
 
 describe("tenantClientPool", () => {
   let tenantClientPool: typeof import("../tenantClientPool");
@@ -52,6 +57,8 @@ describe("tenantClientPool", () => {
       "mongodb://host:27017/tenant-a?retryWrites=true&maxPoolSize=50",
     );
     expect(mockAttachAuditLogging).toHaveBeenCalledWith(client);
+    // Field encryption under this tenant's own data keys.
+    expect(mockAttachFieldProtection).toHaveBeenCalledWith(client, "tenant-a");
   });
 
   it("appends maxPoolSize with a leading '?' when the base URI has no existing query string", () => {

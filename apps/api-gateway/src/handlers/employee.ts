@@ -687,64 +687,58 @@ export async function viewAllKycs(req: Request, res: Response) {
         message: "Internal Server Error",
       });
     }
-    const match: any = {
-      employeeStatus: "Active",
-      tenantId: { $oid: tenantId },
-    };
+    // Names are encrypted, so search and name order are evaluated by the
+    // field-protection hook on this tenant's rows, not by a raw $regex.
+    const where: any = { employeeStatus: "Active", tenantId };
     if (!(await isPrivileged(authReq))) {
       // Non-privileged callers only ever see their own record in this list.
-      match._id = { $oid: authReq.user!.userId };
+      where.id = authReq.user!.userId;
     } else if (req.query.search) {
-      // Escape special regex characters to prevent ReDoS
-      const escaped = String(req.query.search).replace(
-        /[.*+?^${}()|[\]\\]/g,
-        "\\$&",
-      );
-      match.$or = [
-        { username: { $regex: escaped, $options: "i" } },
-        { first_name: { $regex: escaped, $options: "i" } },
-        { last_name: { $regex: escaped, $options: "i" } },
-        { department: { $regex: escaped, $options: "i" } },
-        { designation: { $regex: escaped, $options: "i" } },
-      ];
+      const search = String(req.query.search);
+      where.OR = [
+        "username",
+        "first_name",
+        "last_name",
+        "department",
+        "designation",
+      ].map((f) => ({ [f]: { contains: search, mode: "insensitive" } }));
     }
-    // A string only: Express parses ?status[$ne]=x into an object, which a
-    // raw $match would treat as a query operator.
+    // A string only: Express parses ?status[$ne]=x into an object.
     if (typeof req.query.status === "string" && req.query.status !== "All") {
-      if (req.query.status) match.kyc_approval = req.query.status;
+      if (req.query.status) where.kyc_approval = req.query.status;
     }
 
-    const [rows, countRows] = await Promise.all([
-      prisma.user.aggregateRaw({
-        pipeline: [
-          { $match: match },
-          { $sort: { first_name: 1, last_name: 1 } },
-          { $skip: skip },
-          { $limit: limit },
-          {
-            $project: {
-              _id: 0,
-              id: { $toString: "$_id" },
-              username: 1,
-              first_name: 1,
-              middle_name: 1,
-              last_name: 1,
-              department: 1,
-              designation: 1,
-              employeeStatus: 1,
-              joiningDate: 1,
-              kyc_approval: 1,
-              kyc_date: 1,
-            },
-          },
-        ],
+    const [found, totalCount] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        orderBy: [{ first_name: "asc" }, { last_name: "asc" }],
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          username: true,
+          first_name: true,
+          middle_name: true,
+          last_name: true,
+          department: true,
+          designation: true,
+          employeeStatus: true,
+          kyc_approval: true,
+          kyc_date: true,
+        },
       }),
-      prisma.user.aggregateRaw({
-        pipeline: [{ $match: match }, { $count: "total" }],
-      }) as any,
+      prisma.user.count({ where }),
     ]);
-
-    const totalCount = (countRows as any[])[0]?.total ?? 0;
+    // Same shape the raw aggregation returned: absent fields omitted, dates
+    // as extended JSON.
+    const rows = found.map((u) => {
+      const out: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(u)) {
+        if (v === null || v === undefined) continue;
+        out[k] = v instanceof Date ? { $date: v.toISOString() } : v;
+      }
+      return out;
+    });
 
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
       message: "KYC list fetched",
