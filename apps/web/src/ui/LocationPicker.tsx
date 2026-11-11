@@ -21,6 +21,7 @@ import { useMediaQuery } from "@next/lib/hooks";
 import { Button } from "./controls";
 import { Icon } from "./Icon";
 import { Spinner } from "./Spinner";
+import { usePermissionPrimer } from "./permissionPrimer";
 import f from "./fields.module.css";
 import s from "./LocationPicker.module.css";
 
@@ -235,6 +236,7 @@ export default function LocationPicker({
   const [searching, setSearching] = useState(false);
   const [locating, setLocating] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const { ask, primer } = usePermissionPrimer();
   // The place last chosen here, for the caption until the pin moves elsewhere.
   const [picked, setPicked] = useState<LocationValue | null>(null);
 
@@ -476,13 +478,23 @@ export default function LocationPicker({
     }
   };
 
-  const useMine = () => {
+  const useMine = async () => {
     if (!navigator.geolocation) {
       setProblem("This browser can't share its location.");
       return;
     }
-    setLocating(true);
     setProblem(null);
+    const ok = await ask("geolocation", {
+      title: "Use Your Current Location",
+      reason:
+        "Praesto will read your location once to place the pin where you are now.",
+      points: [
+        "It only fills in this map; nothing is tracked.",
+        "You can move the pin or search for a place instead.",
+      ],
+    });
+    if (!ok) return;
+    setLocating(true);
     navigator.geolocation.getCurrentPosition(
       async (p) => {
         await pick(p.coords.latitude, p.coords.longitude);
@@ -500,6 +512,7 @@ export default function LocationPicker({
 
   return (
     <div className={s.picker}>
+      {primer}
       {!disabled && (
         <div className={s.toolbar}>
           <div className={s.search}>
