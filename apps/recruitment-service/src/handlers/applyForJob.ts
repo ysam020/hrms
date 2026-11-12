@@ -180,6 +180,8 @@ export const applyForJob = async (
         return notify({
           tenantId,
           event: "jobApplicationReceived",
+          link: `/view-job-opening/${jobTitleId}`,
+          category: "recruitment",
           recipients: allTargets.map((u) => u.id),
           pushTargets: allTargets.map((u) => u.username),
           inApp: {

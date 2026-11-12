@@ -179,7 +179,51 @@ onBackgroundMessage(messaging, (payload) => {
       icon: payload.notification?.image ?? "/favicon.ico",
       tag: payload.messageId,
       requireInteraction: true,
-      data: { timestamp: Date.now(), notificationId: payload.messageId },
+      data: {
+        timestamp: Date.now(),
+        notificationId: payload.messageId,
+        link: payload.data?.link,
+      },
     },
+  );
+});
+
+// A same-app path ("/approvals"); anything else opens the app's home.
+function tapTarget(link: unknown): string {
+  return typeof link === "string" &&
+    link.startsWith("/") &&
+    !link.startsWith("//") &&
+    !link.includes("\\")
+    ? link
+    : "/dashboard";
+}
+
+// Tapping a notification this worker showed opens the record it is about:
+// an open Praesto window navigates there and comes to the front; otherwise a
+// new one opens. Notifications the Firebase SDK displayed itself carry
+// FCM_MSG in their data and are opened by the SDK (webpush.fcmOptions.link),
+// so they are left alone here.
+self.addEventListener("notificationclick", (event) => {
+  const data = (event.notification.data ?? {}) as Record<string, unknown>;
+  if (data.FCM_MSG) return;
+  event.notification.close();
+  const url = new URL(tapTarget(data.link), self.location.origin).href;
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+      const mine = windows.find(
+        (w) => new URL(w.url).origin === self.location.origin,
+      );
+      if (mine) {
+        await mine.focus().catch(() => undefined);
+        // navigate() only works on a window this worker controls; fall back
+        // to a new window rather than leaving the tap doing nothing.
+        if (await mine.navigate(url).catch(() => null)) return;
+      }
+      await self.clients.openWindow(url);
+    })(),
   );
 });

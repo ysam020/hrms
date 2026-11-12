@@ -11,6 +11,11 @@ export interface NotificationItem {
   eventType?: string;
   targetUser?: string;
   createdAt?: string;
+  /** App-relative route this notification opens; absent when it has none. */
+  link?: string;
+  category?: string;
+  /** When it was read (ISO); empty/absent = unread. */
+  readAt?: string;
   [key: string]: unknown;
 }
 

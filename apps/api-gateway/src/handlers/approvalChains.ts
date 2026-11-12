@@ -675,6 +675,8 @@ const MODULE_SIDE_EFFECTS: Partial<Record<string, ApprovalSideEffect>> = {
         return notify({
           tenantId,
           event: "wfhDecision",
+          link: "/wfh/requests",
+          category: "attendance",
           recipients: [wfhReq.userId],
           inApp: {
             title: "WFH Request",

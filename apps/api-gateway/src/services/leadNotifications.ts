@@ -114,6 +114,8 @@ export async function notifyLeadTeam(
       notify({
         tenantId: platform,
         event: "leadReceived",
+        link: `/platform-admin/leads/${lead.id}`,
+        category: "platform",
         recipients: team.map((p) => p.id),
         pushTargets: usernames,
         inApp: {

@@ -2,6 +2,8 @@ import {
   getNotifications,
   clearNotification,
   clearAllNotifications,
+  readNotification,
+  readAllNotifications,
 } from "../handlers/notification";
 
 jest.mock("../grpc/clients", () => ({
@@ -142,6 +144,30 @@ describe("notificationHandlers", () => {
         res,
         RESPONSE_STATUS.INTERNAL_SERVER_ERROR,
         expect.any(Object),
+      );
+    });
+  });
+  describe("read state", () => {
+    it("readNotification marks only the given id read, for the caller", async () => {
+      await readNotification(makeReq({ params: { _id: "n-1" } }), makeRes());
+      expect(mockGrpcCall).toHaveBeenCalledWith(
+        expect.anything(),
+        "readNotifications",
+        { userId: "user-1", notificationIds: ["n-1"] },
+      );
+    });
+
+    it("readAllNotifications marks the caller's list read — never clears it", async () => {
+      await readAllNotifications(makeReq(), makeRes());
+      expect(mockGrpcCall).toHaveBeenCalledWith(
+        expect.anything(),
+        "readAllNotifications",
+        { userId: "user-1", notificationIds: [] },
+      );
+      expect(mockGrpcCall).not.toHaveBeenCalledWith(
+        expect.anything(),
+        "markAllAsRead",
+        expect.anything(),
       );
     });
   });

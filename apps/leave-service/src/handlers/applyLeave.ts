@@ -496,6 +496,8 @@ export const applyLeave = async (
         await notify({
           tenantId: getTenantId()!,
           event: "leaveApplied",
+          link: "/approvals",
+          category: "approvals",
           recipients: uniqueIds,
           pushTargets: uniqueUsernames,
           inApp: {

@@ -161,6 +161,8 @@ export const approveLeave = async (
         return notify({
           tenantId: getTenantId()!,
           event: "leaveApproved",
+          link: "/attendance/view-leave-applications",
+          category: "leave",
           recipients: [updatedLeave.userId],
           inApp: {
             title: "Leave",

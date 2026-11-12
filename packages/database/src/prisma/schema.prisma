@@ -118,6 +118,10 @@ model Tenant {
   // with domain left null (e.g. a free-mail signup). "One tenant per domain"
   // is enforced in application code (buildTenant) instead — see tenant.ts.
   domain                         String?
+  // IANA zone the organisation works in ("Asia/Kolkata"). Reminders, due
+  // dates and "today" are computed in it. Optional: rows created before the
+  // field existed read null, which resolveTimeZone() maps to Asia/Kolkata.
+  timeZone                       String?
   isActive                       Boolean   @default(true)
   createdAt                      DateTime  @default(now())
 
@@ -1087,6 +1091,12 @@ model Notification {
   // above for the same caveat. Idempotency is enforced in application code
   // (a findFirst-before-create guard in notificationWorker.ts) instead.
   jobId      String?
+  // App-relative deep link ("/approvals") the bell row and push tap open.
+  // Validated by safeAppLink() (@hrms/common); never an absolute URL.
+  link       String?
+  // Preference category (leave, attendance, approvals, ...): what a person
+  // mutes or keeps. Distinct from eventType, the bell's icon/grouping key.
+  category   String?
 
   recipients NotificationRecipient[]
 
@@ -1096,11 +1106,15 @@ model Notification {
 }
 
 model NotificationRecipient {
-  id             String  @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId       String? @db.ObjectId
-  notificationId String  @db.ObjectId
-  userId         String  @db.ObjectId
-  isCleared      Boolean @default(false)
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId       String?   @db.ObjectId
+  notificationId String    @db.ObjectId
+  userId         String    @db.ObjectId
+  // Removed from this person's list (the bell's "clear"). Not "read".
+  isCleared      Boolean   @default(false)
+  // When this person opened/read it; unset = unread. Independent of
+  // isCleared and of reminder delivery history.
+  readAt         DateTime?
 
   notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id])

@@ -5,7 +5,7 @@ import { useSocket } from "@web/app/providers/SocketContext";
 import { API_ENDPOINTS } from "@web/shared/constants";
 import {
   getNotifications,
-  saveNotifications,
+  replaceNotifications,
   saveNotification,
   pruneNotifications,
 } from "@web/core/db";
@@ -40,11 +40,14 @@ function useNotifications() {
         body?: string;
         createdAt?: string;
       };
+      // A notification arriving live has not been read yet.
       const data = {
         ...raw,
         _id: raw._id || r.id,
         message: raw.message || r.body,
         timeStamp: raw.timeStamp || r.createdAt,
+        isRead: false,
+        readAt: "",
       } as typeof raw;
       setNotifications((prev) => {
         const exists = prev.some(
@@ -93,8 +96,9 @@ function useNotifications() {
       try {
         setLoading(true);
 
-        // show cached notifications immediately (skip already-cleared entries)
-        const cached = (await getNotifications()).filter((n) => !n.isRead);
+        // Show cached notifications immediately. The server's list replaces
+        // them below; cleared entries are deleted from the cache on clear.
+        const cached = await getNotifications();
         if (cached.length > 0 && currentRequestId === requestIdRef.current) {
           setNotifications(cached);
         }
@@ -105,20 +109,20 @@ function useNotifications() {
 
         if (currentRequestId !== requestIdRef.current) return;
 
-        const fresh = (res.data.data || [])
-          .filter((n) => !n.isRead)
-          .map((n) => ({
-            ...n,
-            _id: n._id || n.id,
-            message: n.message || n.body,
-            timeStamp: n.timeStamp || n.createdAt,
-          }));
+        // The server returns only notifications not cleared; read ones stay
+        // in the list (shown as read) until cleared.
+        const fresh = (res.data.data || []).map((n) => ({
+          ...n,
+          _id: n._id || n.id,
+          message: n.message || n.body,
+          timeStamp: n.timeStamp || n.createdAt,
+          isRead: Boolean(n.isRead),
+          link: n.link || undefined,
+        }));
 
         setNotifications(fresh);
 
-        saveNotifications(fresh)
-          .then(() => pruneNotifications(200))
-          .catch(console.error);
+        replaceNotifications(fresh).catch(console.error);
       } catch (err) {
         if (err.name === "CanceledError" || err.code === "ERR_CANCELED") {
           return;

@@ -59,6 +59,8 @@ async function notifyCancellationRequested(
   await notify({
     tenantId,
     event: "leaveCancellationRequested",
+    link: "/approvals",
+    category: "approvals",
     recipients: uniqueIds,
     pushTargets: uniqueUsernames,
     inApp: {

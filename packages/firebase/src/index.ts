@@ -1,6 +1,7 @@
 export { getFirebaseApp, getMessaging } from "./admin";
 export {
   sendPushNotifications,
+  buildPushPayload,
   assertPlatformBroadcastAuthorized,
   PlatformBroadcastNotAuthorizedError,
 } from "./sendPushNotifications";

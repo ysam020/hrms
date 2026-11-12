@@ -1,6 +1,7 @@
 import { prisma } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import {
+  buildPushPayload,
   sendPushNotifications,
   PlatformBroadcastNotAuthorizedError,
 } from "../sendPushNotifications";
@@ -469,5 +470,77 @@ describe("sendPushNotifications — termination during delivery", () => {
       notIn: ["Terminated", "Absconded", "Resigned"],
     });
     expect(db.user.update).not.toHaveBeenCalled(); // never the unconditional write
+  });
+});
+
+describe("push deep links", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("builds the pre-link payload when there is no usable link", () => {
+    for (const link of [undefined, "", "https://evil.example", "//evil"]) {
+      expect(
+        buildPushPayload("T", "B", link, "https://app.praesto.in"),
+      ).toEqual({ notification: { title: "T", body: "B" } });
+    }
+  });
+
+  it("puts the relative link in data and the absolute https link in webpush.fcmOptions", () => {
+    expect(
+      buildPushPayload(
+        "T",
+        "B",
+        "/approvals",
+        "https://app.praesto.in,https://x",
+      ),
+    ).toEqual({
+      notification: { title: "T", body: "B" },
+      data: { link: "/approvals" },
+      webpush: { fcmOptions: { link: "https://app.praesto.in/approvals" } },
+    });
+  });
+
+  it("omits fcmOptions (FCM requires https) but keeps data.link on an http origin", () => {
+    expect(
+      buildPushPayload("T", "B", "/approvals", "http://localhost:5173"),
+    ).toEqual({
+      notification: { title: "T", body: "B" },
+      data: { link: "/approvals" },
+    });
+  });
+
+  it("sends the link with every device's message", async () => {
+    const prev = process.env.CLIENT_URL;
+    process.env.CLIENT_URL = "https://app.praesto.in";
+    try {
+      db.user.findMany.mockResolvedValue([
+        {
+          id: USER_1,
+          fcmTokens: [
+            tokenEntry(),
+            tokenEntry({ token: "tok-2", deviceFingerprint: "fp-2" }),
+          ],
+        },
+      ]);
+      db.user.findUnique.mockResolvedValue({ fcmTokens: [] });
+      mockSend.mockResolvedValue("msg-id");
+      await sendPushNotifications(AUDIENCE, "Leave", "Approved", {
+        link: "/attendance/view-leave-applications",
+      });
+      expect(mockSend).toHaveBeenCalledTimes(2);
+      for (const [message] of mockSend.mock.calls) {
+        expect(message).toMatchObject({
+          data: { link: "/attendance/view-leave-applications" },
+          webpush: {
+            fcmOptions: {
+              link: "https://app.praesto.in/attendance/view-leave-applications",
+            },
+          },
+        });
+      }
+    } finally {
+      process.env.CLIENT_URL = prev;
+    }
   });
 });

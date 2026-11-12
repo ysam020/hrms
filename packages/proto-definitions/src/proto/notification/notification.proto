@@ -10,6 +10,12 @@ message Notification {
   bool isRead = 6;
   string createdAt = 7;
   string data = 8;  // JSON-encoded extra data
+  // App-relative deep link ("/approvals"); empty when the notification has none.
+  string link = 9;
+  string category = 10;
+  // ISO time it was read; empty = unread. isRead mirrors it.
+  string readAt = 11;
+  string priority = 12;
 }
 
 message SendNotificationRequest {
@@ -72,4 +78,9 @@ service NotificationService {
   rpc MarkAllAsRead (MarkReadRequest) returns (BasicResponse);
   // Deletes a notification by ID.
   rpc DeleteNotification (MarkReadRequest) returns (BasicResponse);
+  // MarkAsRead/MarkAllAsRead predate read state and CLEAR (remove from the
+  // list); kept under those names for compatibility. These two record that
+  // the person read them, leaving them in the list.
+  rpc ReadNotifications (MarkReadRequest) returns (BasicResponse);
+  rpc ReadAllNotifications (MarkReadRequest) returns (BasicResponse);
 }

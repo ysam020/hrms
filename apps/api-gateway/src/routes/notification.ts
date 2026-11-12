@@ -15,3 +15,13 @@ notificationRouter.put(
   authenticate,
   h.clearAllNotifications,
 );
+notificationRouter.put(
+  "/read-notification/:_id",
+  authenticate,
+  h.readNotification,
+);
+notificationRouter.put(
+  "/read-all-notifications",
+  authenticate,
+  h.readAllNotifications,
+);

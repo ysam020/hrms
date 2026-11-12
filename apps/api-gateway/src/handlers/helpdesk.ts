@@ -100,6 +100,7 @@ async function notifyTicketEvent(
   title: string,
   message: string,
   priority: "high" | "medium" | "low",
+  ticketId: string,
 ): Promise<void> {
   if (recipientIds.length === 0) return;
   const users = await prisma.user.findMany({
@@ -110,6 +111,8 @@ async function notifyTicketEvent(
   await notify({
     tenantId,
     event: "helpdeskNotification",
+    link: `/helpdesk/${ticketId}`,
+    category: "helpdesk",
     recipients: users.map((u) => u.id),
     pushTargets: users.map((u) => u.username),
     inApp: {
@@ -203,6 +206,7 @@ export async function createTicket(req: Request, res: Response) {
           priority === "critical"
             ? "high"
             : (priority as "high" | "medium" | "low"),
+          ticket.id,
         );
       } catch (err) {
         logger.warn(`ticket-created notification failed for ${ticketNo}`, {
@@ -492,6 +496,7 @@ export async function updateTicket(req: Request, res: Response) {
           "Ticket updated",
           `${(ticket as any).ticketNo}: ${changeSummary}`,
           "medium",
+          (ticket as any).id,
         );
       } catch (err) {
         logger.warn(
@@ -582,6 +587,7 @@ export async function addComment(req: Request, res: Response) {
           "New ticket comment",
           `New comment on ${(ticket as any).ticketNo}`,
           "medium",
+          (ticket as any).id,
         );
       } catch (err) {
         logger.warn(

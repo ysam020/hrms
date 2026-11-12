@@ -118,9 +118,40 @@ export interface NotifyEmailChannel {
   attachments?: EmailJobData["attachments"];
 }
 
+/**
+ * What a person can choose to keep or mute (notification preferences, and
+ * the reminder engine's per-category channel rules). Coarser than
+ * NotificationEventType and independent of the bell's eventType grouping.
+ * A new module adds a category here; nothing else changes.
+ */
+export type NotificationCategory =
+  | "attendance"
+  | "leave"
+  | "approvals"
+  | "payroll"
+  | "kyc"
+  | "performance"
+  | "recruitment"
+  | "exit"
+  | "assets"
+  | "helpdesk"
+  | "announcements"
+  | "account"
+  | "billing"
+  | "support"
+  // Praesto's own team (website leads); never a tenant's employees.
+  | "platform";
+
 export interface NotifyOptions {
   tenantId: string;
   event: NotificationEventType;
+  /**
+   * App-relative route the notification opens ("/approvals",
+   * "/helpdesk/<id>"). Stored on the bell row and used as the push tap
+   * target; the destination screen still enforces its own permissions.
+   */
+  link?: string;
+  category?: NotificationCategory;
   /** Explicit recipient user IDs — preferred over pushTargets/targetUser when already known (skips a username->id lookup in the worker). */
   recipients?: string[];
   /** Recipient usernames — resolved to user IDs by the worker. */

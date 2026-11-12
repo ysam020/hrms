@@ -228,6 +228,10 @@ export const updateApplicationStatus = async (
         return notify({
           tenantId: tenantId!,
           event: "applicationStatusUpdated",
+          link: updatedApplication.jobTitleId
+            ? `/view-job-opening/${updatedApplication.jobTitleId}`
+            : "/job-openings/view-job-openings",
+          category: "recruitment",
           recipients: hrUsers.map((u) => u.id),
           pushTargets: hrUsers.map((u) => u.username),
           inApp:

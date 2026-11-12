@@ -469,6 +469,7 @@ export async function assignAsset(req: Request, res: Response) {
           return notify({
             tenantId,
             event: "assetAssigned",
+            category: "assets",
             recipients: [userId],
             inApp: {
               title: "Asset assigned",
@@ -777,6 +778,8 @@ export async function reportAssetIssue(req: Request, res: Response) {
         await notify({
           tenantId,
           event: "assetIssueReported",
+          link: "/assets/issues",
+          category: "assets",
           recipients: recipientUsers.map((u) => u.id),
           pushTargets: recipientUsers.map((u) => u.username),
           inApp: {

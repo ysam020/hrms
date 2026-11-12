@@ -1,4 +1,8 @@
-import { outboundSideEffectsAllowed } from "@hrms/common";
+import {
+  absoluteAppLink,
+  outboundSideEffectsAllowed,
+  safeAppLink,
+} from "@hrms/common";
 import { prisma, BLOCKED_STATUSES } from "@hrms/db";
 import { logger } from "@hrms/logger";
 import { getMessaging } from "./admin";
@@ -31,6 +35,37 @@ interface TokenRecord {
 interface SendOptions {
   /** Send only the single most-recently-used token per user (reduces duplicate notifications on multi-device users). */
   latestOnly?: boolean;
+  /** App-relative route a tap opens ("/approvals"). Dropped unless safeAppLink() accepts it. */
+  link?: string;
+}
+
+/**
+ * The FCM message for one notification. `data.link` (relative) is what the
+ * service worker's own click handler reads; `webpush.fcmOptions.link`
+ * (absolute, https only per FCM) covers notifications the Firebase SDK
+ * displays itself. Without a usable link the message is exactly what it was
+ * before links existed.
+ */
+export function buildPushPayload(
+  title: string,
+  body: string,
+  link?: string,
+  clientUrl: string | undefined = process.env.CLIENT_URL,
+): {
+  notification: { title: string; body: string };
+  data?: { link: string };
+  webpush?: { fcmOptions: { link: string } };
+} {
+  const path = safeAppLink(link);
+  if (!path) return { notification: { title, body } };
+  const absolute = absoluteAppLink(path, clientUrl);
+  return {
+    notification: { title, body },
+    data: { link: path },
+    ...(absolute?.startsWith("https://")
+      ? { webpush: { fcmOptions: { link: absolute } } }
+      : {}),
+  };
 }
 
 interface SendResult {
@@ -126,7 +161,7 @@ export async function sendPushNotifications(
   body: string,
   options: SendOptions = {},
 ): Promise<SendResult> {
-  const { latestOnly = false } = options;
+  const { latestOnly = false, link } = options;
 
   const noTokens: SendResult = {
     success: false,
@@ -197,7 +232,7 @@ export async function sendPushNotifications(
   if (tokenRecords.length === 0) return noTokens;
 
   const messaging = getMessaging();
-  const payload = { notification: { title, body } };
+  const payload = buildPushPayload(title, body, link);
 
   let sentCount = 0;
   let failedCount = 0;

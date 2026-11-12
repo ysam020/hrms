@@ -59,6 +59,8 @@ interface OrgProfile {
   logoUrl: string | null;
   signatoryName: string | null;
   signatoryDesignation: string | null;
+  /** IANA zone; null = the default (Asia/Kolkata). */
+  timeZone: string | null;
 }
 type ProfileForm = Record<Exclude<keyof OrgProfile, "name">, string>;
 const PROFILE_FIELDS = [
@@ -72,7 +74,31 @@ const PROFILE_FIELDS = [
   "logoUrl",
   "signatoryName",
   "signatoryDesignation",
+  "timeZone",
 ] as const;
+
+const DEFAULT_TIME_ZONE = "Asia/Kolkata";
+
+// Every zone this browser knows; the gateway re-validates. Older engines
+// without supportedValuesOf get a short list plus whatever is saved.
+function timeZoneOptions(current: string): string[] {
+  let zones: string[] = [];
+  try {
+    zones = (Intl as any).supportedValuesOf?.("timeZone") ?? [];
+  } catch {
+    zones = [];
+  }
+  if (zones.length === 0)
+    zones = [
+      DEFAULT_TIME_ZONE,
+      "UTC",
+      "Asia/Dubai",
+      "Asia/Singapore",
+      "Europe/London",
+      "America/New_York",
+    ];
+  return current && !zones.includes(current) ? [current, ...zones] : zones;
+}
 
 export function CompanyInfoPage() {
   const { user } = useContext(UserContext);
@@ -217,6 +243,10 @@ export function CompanyInfoPage() {
                   [lab("link", "Website"), link(profile?.website)],
                   [lab("pin", "Office Address"), profile?.officeAddress],
                   [lab("flag", "State"), profile?.workState],
+                  [
+                    lab("clock", "Time Zone"),
+                    profile?.timeZone ?? `${DEFAULT_TIME_ZONE} (default)`,
+                  ],
                 ]}
               />
             </FormSection>
@@ -300,6 +330,20 @@ export function CompanyInfoPage() {
                 <option value="">Choose…</option>
                 {states.map((st: string) => (
                   <option key={st}>{st}</option>
+                ))}
+              </Select>
+            </Field>
+            <Field
+              label="Time Zone"
+              hint="Reminders, due dates and working hours follow this zone."
+            >
+              <Select
+                value={form.timeZone}
+                onChange={(e) => set({ timeZone: e.target.value })}
+              >
+                <option value="">{`${DEFAULT_TIME_ZONE} (default)`}</option>
+                {timeZoneOptions(form.timeZone).map((tz) => (
+                  <option key={tz}>{tz}</option>
                 ))}
               </Select>
             </Field>

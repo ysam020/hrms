@@ -852,6 +852,13 @@ paths:
                           logoUrl: { type: string, nullable: true }
                           signatoryName: { type: string, nullable: true }
                           signatoryDesignation: { type: string, nullable: true }
+                          timeZone:
+                            {
+                              type: string,
+                              nullable: true,
+                              example: "Asia/Kolkata",
+                              description: "IANA time zone; null means the default, Asia/Kolkata",
+                            }
         "401":
           description: Unauthorized
         "402":
@@ -906,6 +913,12 @@ paths:
                 logoUrl: { type: string }
                 signatoryName: { type: string, example: "Jane Doe" }
                 signatoryDesignation: { type: string, example: "HR Director" }
+                timeZone:
+                  {
+                    type: string,
+                    example: "Asia/Kolkata",
+                    description: "IANA time zone used for reminders and due dates. Empty string resets to Asia/Kolkata; an unknown zone returns 400.",
+                  }
       responses:
         "200":
           description: Org profile updated — same shape as GET

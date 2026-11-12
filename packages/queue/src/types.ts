@@ -50,6 +50,12 @@ export interface NotificationJobData {
   eventType?: string;
   sendPushNotification?: boolean;
   priority?: "high" | "medium" | "low";
+  /** App-relative deep link ("/approvals") — persisted on the bell row and
+   * sent as the push tap target. The worker drops anything safeAppLink()
+   * (@hrms/common) rejects. */
+  link?: string;
+  /** Preference category (see NotificationCategory in @hrms/notifications). */
+  category?: string;
   metadata?: Record<string, unknown>;
   /**
    * When set, also emits this event name (with socketPayload, or the

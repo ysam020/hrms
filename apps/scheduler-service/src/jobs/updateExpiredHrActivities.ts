@@ -84,6 +84,8 @@ async function expireForTenant(tenantId: string): Promise<number> {
         await notify({
           tenantId,
           event: "hrActivityExpired",
+          link: "/hr-activities",
+          category: "announcements",
           recipients: [owner.id],
           inApp: {
             title: "HR Activity expired",

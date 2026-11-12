@@ -104,6 +104,8 @@ export const createCycle = async (
           return notify({
             tenantId,
             event: "performanceReviewAssigned",
+            link: "/performance-reviews/reviews",
+            category: "performance",
             recipients: assignedUserIds,
             inApp: {
               title: "Performance Review",

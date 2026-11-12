@@ -77,6 +77,17 @@ interface Message {
   email?: { subject: string; heading: string; lines: string[]; link: string };
 }
 
+/** "/support/tickets/<id>" from the absolute URL appUrl() built. */
+function pathOf(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  try {
+    const u = new URL(url);
+    return `${u.pathname}${u.search}`;
+  } catch {
+    return undefined;
+  }
+}
+
 /** In-app (+push) to each person in their own tenant DB, plus optional email. */
 async function deliver(
   event: NotificationEventType,
@@ -95,6 +106,9 @@ async function deliver(
       notify({
         tenantId,
         event,
+        // The same screen the email button opens, as an in-app path.
+        link: pathOf(msg.email?.link),
+        category: "support",
         recipients: group.map((p) => p.id),
         pushTargets: usernames,
         inApp: {

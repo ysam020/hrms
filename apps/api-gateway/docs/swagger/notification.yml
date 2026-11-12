@@ -4,9 +4,10 @@ paths:
       operationId: getNotifications
       summary: Get notifications
       description: >
-        Returns a paginated list of notifications for the authenticated user,
-        along with the total count and current unread count. Pass
-        `unreadOnly=true` to only return notifications not yet cleared.
+        Returns a paginated list of the authenticated user's notifications,
+        newest first, with the total count and the unread count. Cleared
+        notifications are never returned. Pass `unreadOnly=true` to return
+        only notifications not yet read.
 
 
         Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
@@ -19,7 +20,7 @@ paths:
           in: query
           required: false
           schema: { type: boolean, default: false }
-          description: When true, only returns notifications that haven't been cleared
+          description: When true, only returns notifications that haven't been read
         - name: page
           in: query
           required: false
@@ -53,6 +54,20 @@ paths:
                           }
                         type: { type: string, example: "leave" }
                         isRead: { type: boolean, example: false }
+                        readAt:
+                          {
+                            type: string,
+                            description: "ISO time it was read; empty when unread",
+                            example: "",
+                          }
+                        link:
+                          {
+                            type: string,
+                            description: "App-relative route to open; empty when none",
+                            example: "/approvals",
+                          }
+                        category: { type: string, example: "leave" }
+                        priority: { type: string, example: "medium" }
                         createdAt: { type: string, format: date-time }
                   total: { type: integer, example: 42 }
                   unreadCount: { type: integer, example: 5 }
@@ -74,9 +89,10 @@ paths:
       operationId: clearNotification
       summary: Clear a single notification
       description: >
-        Marks one notification as read/cleared for the authenticated user.
-        The `_id` path parameter is the notification `id` returned by
-        GET /get-notifications.
+        Removes one notification from the authenticated user's list. The
+        `_id` path parameter is the notification `id` returned by
+        GET /get-notifications. To mark it read without removing it, use
+        PUT /read-notification/{_id}.
 
 
         Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
@@ -121,7 +137,7 @@ paths:
       operationId: clearAllNotifications
       summary: Clear all notifications
       description: >-
-        Marks every uncleared notification for the authenticated user as read/cleared.
+        Removes every notification from the authenticated user's list.
 
 
         Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
@@ -135,6 +151,96 @@ paths:
       responses:
         "200":
           description: All notifications cleared
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    {
+                      type: string,
+                      example: "All notifications marked as read",
+                    }
+        "401":
+          description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/read-notification/{_id}:
+    put:
+      operationId: readNotification
+      summary: Mark a notification read
+      description: >
+        Marks one notification as read for the authenticated user. It stays
+        in their list. Idempotent: the first read time is kept. The `_id`
+        path parameter is the notification `id` returned by
+        GET /get-notifications.
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
+      tags: [Notification]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: _id
+          in: path
+          required: true
+          schema: { type: string }
+          example: "6672a2501aa931b68b091faf"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Notification marked read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    { type: string, example: "Notification(s) marked as read" }
+        "401":
+          description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/read-all-notifications:
+    put:
+      operationId: readAllNotifications
+      summary: Mark all notifications read
+      description: >-
+        Marks every unread notification in the authenticated user's list as read.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
+      tags: [Notification]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: All notifications marked read
           content:
             application/json:
               schema:
