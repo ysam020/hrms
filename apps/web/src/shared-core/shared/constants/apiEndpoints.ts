@@ -2,6 +2,8 @@ const NOTIFICATIONS = {
   GET_NOTIFICATIONS: "/get-notifications",
   CLEAR_NOTIFICATION: (id: string | number) => `/clear-notification/${id}`,
   CLEAR_ALL_NOTIFICATIONS: "/clear-all-notifications",
+  READ_NOTIFICATION: (id: string | number) => `/read-notification/${id}`,
+  READ_ALL_NOTIFICATIONS: "/read-all-notifications",
   DISABLE_PUSH_NOTIFICATIONS: "/disable-push-notifications",
   SAVE_FCM_TOKEN: "/save-fcm-token",
 };

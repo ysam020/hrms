@@ -37,6 +37,8 @@ export async function notify(options: NotifyOptions): Promise<NotifyResult> {
           targetUser: options.targetUser,
           broadcast: options.broadcast,
           eventType: options.inApp.eventType,
+          link: options.link,
+          category: options.category,
           sendPushNotification: options.push?.enabled ?? true,
           priority: options.inApp.priority,
           silent: options.inApp.silent,

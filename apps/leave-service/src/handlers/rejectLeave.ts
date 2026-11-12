@@ -71,6 +71,8 @@ export const rejectLeave = async (
         return notify({
           tenantId: getTenantId()!,
           event: "leaveRejected",
+          link: "/attendance/view-leave-applications",
+          category: "leave",
           recipients: [updatedLeave.userId],
           inApp: {
             title: "Leave",

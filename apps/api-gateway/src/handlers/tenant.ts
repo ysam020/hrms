@@ -26,6 +26,7 @@ import {
   PLATFORM_FROM,
   renderEmailHtml,
   hasPrivilegedRole,
+  isValidTimeZone,
 } from "@hrms/common";
 import { logger } from "@hrms/logger";
 import { handleError } from "../utils/handleError";
@@ -951,6 +952,7 @@ export async function getOrgProfile(req: AuthRequest, res: Response) {
         logoUrl: true,
         signatoryName: true,
         signatoryDesignation: true,
+        timeZone: true,
       },
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
@@ -994,6 +996,7 @@ export async function updateOrgProfile(req: AuthRequest, res: Response) {
       logoUrl,
       signatoryName,
       signatoryDesignation,
+      timeZone,
     } = req.body as {
       helpPhone?: string;
       helpEmail?: string;
@@ -1005,7 +1008,15 @@ export async function updateOrgProfile(req: AuthRequest, res: Response) {
       logoUrl?: string;
       signatoryName?: string;
       signatoryDesignation?: string;
+      timeZone?: string;
     };
+    // Empty clears it back to the default (Asia/Kolkata); anything else must
+    // be a zone this runtime knows, or reminders would silently fall back.
+    if (timeZone != null && timeZone !== "" && !isValidTimeZone(timeZone)) {
+      return apiResponse(res, RESPONSE_STATUS.BAD_REQUEST, {
+        message: "Unknown time zone. Use an IANA name such as Asia/Kolkata.",
+      });
+    }
     const tenant = await prisma.tenant.update({
       where: { id: tenantId },
       data: {
@@ -1025,6 +1036,7 @@ export async function updateOrgProfile(req: AuthRequest, res: Response) {
         ...(signatoryDesignation !== undefined && {
           signatoryDesignation: signatoryDesignation || null,
         }),
+        ...(timeZone !== undefined && { timeZone: timeZone || null }),
       },
       select: {
         name: true,
@@ -1038,6 +1050,7 @@ export async function updateOrgProfile(req: AuthRequest, res: Response) {
         logoUrl: true,
         signatoryName: true,
         signatoryDesignation: true,
+        timeZone: true,
       },
     });
     return apiResponse(res, RESPONSE_STATUS.SUCCESS, {
@@ -1279,6 +1292,8 @@ export async function createJoinRequest(req: AuthRequest, res: Response) {
           notify({
             tenantId,
             event: "joinRequestSubmitted",
+            link: "/settings/join-requests",
+            category: "approvals",
             recipients: recipientIds,
             inApp: {
               title: "Join request",

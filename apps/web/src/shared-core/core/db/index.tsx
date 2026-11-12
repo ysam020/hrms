@@ -176,6 +176,19 @@ export async function saveNotification(notification) {
   return promisify(store.put(notification));
 }
 
+// The server's list is the truth: replacing the cache with it drops entries
+// cleared elsewhere (another device, or before this cache existed).
+export async function replaceNotifications(notifications) {
+  const store = await tx("notifications", "readwrite");
+  await promisify(store.clear());
+  await Promise.all((notifications ?? []).map((n) => promisify(store.put(n))));
+}
+
+export async function deleteNotificationsFromDB(ids: string[]) {
+  const store = await tx("notifications", "readwrite");
+  await Promise.all(ids.map((id) => promisify(store.delete(id))));
+}
+
 // Keep only the most recent N notifications to avoid unbounded growth
 export async function pruneNotifications(maxCount = 200) {
   const store = await tx("notifications", "readwrite");

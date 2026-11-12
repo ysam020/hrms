@@ -82,6 +82,8 @@ export const allowKycEdit = async (
     notify({
       tenantId: getTenantId()!,
       event: "kycEditAllowed",
+      link: "/kyc/complete-kyc",
+      category: "kyc",
       targetUser: updatedUser!.username,
       inApp: {
         title: "KYC",
@@ -104,6 +106,8 @@ export const allowKycEdit = async (
         return notify({
           tenantId: getTenantId()!,
           event: "kycEditResolved",
+          link: "/kyc/view-employee-kycs",
+          category: "kyc",
           pushTargets: others.map((u) => u.username),
           inApp: {
             title: "KYC",

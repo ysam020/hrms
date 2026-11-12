@@ -76,6 +76,8 @@ export const requestKycRevision = async (
     notify({
       tenantId: getTenantId()!,
       event: "kycRevisionRequested",
+      link: "/kyc/complete-kyc",
+      category: "kyc",
       targetUser: updatedUser.username,
       inApp: {
         title: "KYC",

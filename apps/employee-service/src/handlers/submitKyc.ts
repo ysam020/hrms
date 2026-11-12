@@ -168,6 +168,8 @@ export const submitKyc = async (
           return notify({
             tenantId: getTenantId()!,
             event: "kycSubmitted",
+            link: "/kyc/view-employee-kycs",
+            category: "kyc",
             recipients: approvers.map((u) => u.id),
             pushTargets: approvers.map((u) => u.username),
             inApp: {

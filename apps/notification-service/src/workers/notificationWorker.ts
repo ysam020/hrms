@@ -22,6 +22,7 @@ import {
   type PushAudience,
 } from "@hrms/firebase";
 import { getRedisClient } from "@hrms/cache";
+import { safeAppLink } from "@hrms/common";
 import type { NotificationBroadcast, NotificationJobData } from "@hrms/queue";
 import type { Job } from "bullmq";
 
@@ -348,7 +349,12 @@ async function processJob(job: Job<NotificationJobData>) {
     socketEvent,
     socketPayload,
     silent = false,
+    category,
   } = job.data;
+  // Producers are trusted code, but a link becomes a navigation target in
+  // the browser and a URL in a push payload — anything not a same-app path
+  // is dropped rather than stored or sent.
+  const link = safeAppLink(job.data.link);
 
   if (!tenantId) {
     // Every notification in this app belongs to a tenant. Writing it
@@ -401,6 +407,7 @@ async function processJob(job: Job<NotificationJobData>) {
         sendPushNotification,
         socketEvent,
         socketPayload,
+        link,
       });
     }
 
@@ -455,6 +462,8 @@ async function processJob(job: Job<NotificationJobData>) {
         eventType,
         priority,
         timeStamp: new Date(),
+        ...(link ? { link } : {}),
+        ...(category ? { category } : {}),
         ...(job.id ? { jobId: String(job.id) } : {}),
         ...(resolvedRecipients.length > 0
           ? {
@@ -512,6 +521,7 @@ async function processJob(job: Job<NotificationJobData>) {
         pushAudienceFor(tenantId, targets, broadcast),
         title,
         message,
+        { link },
       );
 
       fcmResult = {
@@ -560,7 +570,7 @@ async function processSilentJob(
   > &
     Pick<
       NotificationJobData,
-      "targetUser" | "broadcast" | "socketEvent" | "socketPayload"
+      "targetUser" | "broadcast" | "socketEvent" | "socketPayload" | "link"
     >,
 ) {
   const {
@@ -574,6 +584,7 @@ async function processSilentJob(
     sendPushNotification,
     socketEvent,
     socketPayload,
+    link,
   } = data;
 
   const dedupeKey = job.id ? `notification-job-done:${job.id}` : null;
@@ -620,6 +631,7 @@ async function processSilentJob(
       eventType,
       title,
       message,
+      link,
       timeStamp: new Date(),
     };
     const live = await realtimeEligible(resolvedRecipients);
@@ -650,6 +662,7 @@ async function processSilentJob(
       pushAudienceFor(job.data.tenantId, targets, broadcast),
       title,
       message,
+      { link },
     );
     fcmResult = {
       sentCount: result.sentCount,

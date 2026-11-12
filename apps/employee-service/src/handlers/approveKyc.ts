@@ -58,6 +58,8 @@ export const approveKyc = async (
     notify({
       tenantId: getTenantId()!,
       event: "kycApproved",
+      link: "/kyc/complete-kyc",
+      category: "kyc",
       targetUser: updatedUser.username,
       inApp: {
         title: "KYC",

@@ -169,6 +169,8 @@ export const submitResignation = async (
         await notify({
           tenantId: getTenantId()!,
           event: "resignationSubmitted",
+          link: "/approvals",
+          category: "approvals",
           recipients: uniqueIds,
           pushTargets: uniqueUsernames,
           inApp: {

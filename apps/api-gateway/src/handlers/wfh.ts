@@ -269,6 +269,8 @@ export async function requestWfh(req: Request, res: Response) {
         await notify({
           tenantId,
           event: "wfhRequested",
+          link: "/approvals",
+          category: "approvals",
           recipients: uniqueIds,
           pushTargets: uniqueUsernames,
           inApp: {

@@ -449,8 +449,41 @@ button.item {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 2px 8px;
-  padding: 10px 8px 10px 16px;
+  padding: 4px 8px 4px 4px;
   border-bottom: 1px solid var(--px-separator);
+}
+.notifItem[data-unread] {
+  background: var(--px-accent-soft);
+}
+/* The whole text block is one target: it marks the notification read and,
+   when it has a link, opens the record. */
+.notifOpen {
+  grid-column: 1;
+  display: grid;
+  gap: 2px;
+  padding: 6px 4px 6px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.notifOpen:hover {
+  background: var(--px-bg-hover);
+}
+.notifOpen:focus-visible {
+  outline: 2px solid var(--px-accent);
+  outline-offset: -2px;
+}
+.notifDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-inline-end: 6px;
+  border-radius: 50%;
+  background: var(--px-accent);
+  vertical-align: middle;
 }
 .notifItem:last-child {
   border-bottom: 0;
@@ -471,6 +504,6 @@ button.item {
 }
 .notifClear {
   grid-column: 2;
-  grid-row: 1 / span 3;
+  grid-row: 1;
   align-self: start;
 }

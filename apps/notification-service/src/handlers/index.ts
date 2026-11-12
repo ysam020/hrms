@@ -4,6 +4,7 @@ import { getNotifications } from "./getNotifications";
 import { markAsRead } from "./markAsRead";
 import { markAllAsRead } from "./markAllAsRead";
 import { deleteNotification } from "./deleteNotification";
+import { readNotifications, readAllNotifications } from "./readNotifications";
 
 export const handlers = {
   SendNotification: sendNotification,
@@ -12,4 +13,6 @@ export const handlers = {
   MarkAsRead: markAsRead,
   MarkAllAsRead: markAllAsRead,
   DeleteNotification: deleteNotification,
+  ReadNotifications: readNotifications,
+  ReadAllNotifications: readAllNotifications,
 };

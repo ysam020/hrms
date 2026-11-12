@@ -50,3 +50,35 @@ export async function clearAllNotifications(req: Request, res: Response) {
     return handleError(res, error);
   }
 }
+
+// PUT /read-notification/:_id — the person opened it: unread → read. It
+// stays in their list (clearing is the separate call above).
+export async function readNotification(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
+  try {
+    const response = await grpcCall(notificationClient, "readNotifications", {
+      userId: user!.userId,
+      notificationIds: [req.params._id],
+    });
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
+  } catch (error: unknown) {
+    logger.error("PUT /read-notification error:", { error });
+    return handleError(res, error);
+  }
+}
+
+// PUT /read-all-notifications — every uncleared notification becomes read.
+export async function readAllNotifications(req: Request, res: Response) {
+  const { user } = req as AuthRequest;
+  try {
+    const response = await grpcCall(
+      notificationClient,
+      "readAllNotifications",
+      { userId: user!.userId, notificationIds: [] },
+    );
+    return apiResponse(res, RESPONSE_STATUS.SUCCESS, response);
+  } catch (error: unknown) {
+    logger.error("PUT /read-all-notifications error:", { error });
+    return handleError(res, error);
+  }
+}

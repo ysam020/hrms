@@ -452,6 +452,82 @@ describe("notificationWorker", () => {
     });
   });
 
+  describe("deep links and categories", () => {
+    const base = {
+      tenantId: TENANT,
+      title: "Leave",
+      message: "Approved",
+      recipients: [ALICE],
+    };
+
+    it("persists a same-app link and the category, and sends the link with the push", async () => {
+      await runProcessor({
+        ...base,
+        link: "/attendance/view-leave-applications",
+        category: "leave",
+      });
+      expect(mockNotificationCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            link: "/attendance/view-leave-applications",
+            category: "leave",
+          }),
+        }),
+      );
+      expect(mockSendPushNotifications).toHaveBeenCalledWith(
+        { tenantId: TENANT, userIds: [ALICE] },
+        "Leave",
+        "Approved",
+        { link: "/attendance/view-leave-applications" },
+      );
+    });
+
+    it.each([
+      "https://evil.example/phish",
+      "//evil.example",
+      "javascript:alert(1)",
+      "/\\evil.example",
+      "approvals",
+    ])(
+      "drops an unsafe link (%s) instead of storing or pushing it",
+      async (link) => {
+        await runProcessor({ ...base, link });
+        const data = mockNotificationCreate.mock.calls[0][0].data;
+        expect(data).not.toHaveProperty("link");
+        expect(mockSendPushNotifications).toHaveBeenCalledWith(
+          expect.anything(),
+          "Leave",
+          "Approved",
+          { link: undefined },
+        );
+      },
+    );
+
+    it("stores no link or category when the producer gives none (pre-link behaviour)", async () => {
+      await runProcessor(base);
+      const data = mockNotificationCreate.mock.calls[0][0].data;
+      expect(data).not.toHaveProperty("link");
+      expect(data).not.toHaveProperty("category");
+    });
+
+    it("a silent ping carries the link to the socket and the push", async () => {
+      await runProcessor({ ...base, silent: true, link: "/approvals" });
+      expect(mockSendToUser).toHaveBeenCalledWith(
+        ALICE,
+        "notification",
+        expect.objectContaining({ silent: true, link: "/approvals" }),
+        { tenantId: TENANT },
+      );
+      expect(mockSendPushNotifications).toHaveBeenCalledWith(
+        expect.anything(),
+        "Leave",
+        "Approved",
+        { link: "/approvals" },
+      );
+      expect(mockNotificationCreate).not.toHaveBeenCalled();
+    });
+  });
+
   describe("FCM push notifications", () => {
     it("sends to pushTargets when provided", async () => {
       await runProcessor({
@@ -464,6 +540,7 @@ describe("notificationWorker", () => {
         { tenantId: TENANT, userIds: [ALICE, BOB] },
         "Title",
         "Body",
+        { link: undefined },
       );
     });
 
@@ -478,6 +555,7 @@ describe("notificationWorker", () => {
         { tenantId: TENANT, userIds: [ALICE] },
         "Title",
         "Body",
+        { link: undefined },
       );
     });
 
@@ -493,6 +571,7 @@ describe("notificationWorker", () => {
         { tenantId: TENANT, userIds: [ALICE] },
         "Performance Review",
         "Body",
+        { link: undefined },
       );
     });
 
@@ -622,6 +701,7 @@ describe("notificationWorker", () => {
         { tenantId: TENANT, userIds: [ALICE] },
         "Leave",
         "Approved",
+        { link: undefined },
       );
       expect(mockNotificationCreate).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -654,6 +734,7 @@ describe("notificationWorker", () => {
         { tenantId: TENANT, userIds: [ALICE] },
         "Leave",
         "Approved",
+        { link: undefined },
       );
       expect(mockNotificationCreate).not.toHaveBeenCalled();
     });
@@ -701,6 +782,7 @@ describe("notificationWorker", () => {
         { tenantId: TENANT, userIds: [ALICE, BOB] },
         "Office closed",
         "Friday",
+        { link: undefined },
       );
     });
 
@@ -770,6 +852,7 @@ describe("notificationWorker", () => {
         },
         "Maintenance",
         "Sunday 02:00",
+        { link: undefined },
       );
     });
   });

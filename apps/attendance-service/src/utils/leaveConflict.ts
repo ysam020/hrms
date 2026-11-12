@@ -153,6 +153,8 @@ async function notifyLeaveAutoCancelled(
   await notify({
     tenantId: getTenantId()!,
     event: "leaveAutoCancelled",
+    link: "/attendance/view-leave-applications",
+    category: "leave",
     recipients: uniqueIds,
     pushTargets: uniqueUsernames,
     inApp: {

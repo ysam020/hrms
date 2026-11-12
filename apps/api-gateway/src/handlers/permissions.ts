@@ -291,6 +291,7 @@ export async function saveUserPermissions(req: Request, res: Response) {
           return notify({
             tenantId,
             event: "permissionsGranted",
+            category: "account",
             recipients: [user.id],
             inApp: {
               title: "Permissions Updated",

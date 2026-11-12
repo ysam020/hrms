@@ -54,6 +54,8 @@ async function notifySlaBreach(
     await notify({
       tenantId,
       event: "helpdeskSlaBreach",
+      link: `/helpdesk/${ticketId}`,
+      category: "helpdesk",
       recipients: users.map((u) => u.id),
       inApp: {
         title: "Ticket SLA breached",

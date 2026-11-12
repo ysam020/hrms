@@ -34,7 +34,7 @@ const mockCount = (prisma as any).notificationRecipient.count as jest.Mock;
 // aggregateRaw returns MongoDB extended JSON.
 const makeRow = (overrides: Record<string, any> = {}) => ({
   _id: { $oid: "64b0000000000000000000aa" },
-  isCleared: false,
+  notificationId: { $oid: "64b0000000000000000000bb" },
   n: {
     _id: { $oid: "64b0000000000000000000bb" },
     title: "Test",
@@ -86,20 +86,63 @@ describe("getNotifications", () => {
     });
   });
 
-  it("maps recipient records to the same response shape as before", async () => {
-    mockAggregate.mockResolvedValue([makeRow({ isCleared: true })]);
+  it("identifies each item by its NOTIFICATION id — the id clear/read act on", async () => {
+    mockAggregate.mockResolvedValue([makeRow()]);
+    mockCount.mockResolvedValue(1);
+
+    const cb = makeCallback();
+    await getNotifications(makeCall({ userId: USER }), cb);
+
+    // Not the recipient row's own _id (…aa): no clear call could match it.
+    expect(cb.mock.calls[0][1].data[0].id).toBe("64b0000000000000000000bb");
+  });
+
+  it("maps an unread notification with its link, category and priority", async () => {
+    mockAggregate.mockResolvedValue([
+      makeRow({
+        n: {
+          title: "Leave",
+          message: "Approved",
+          eventType: "leave_notification",
+          timeStamp: { $date: "2024-03-04T10:00:00.000Z" },
+          link: "/attendance/view-leave-applications",
+          category: "leave",
+          priority: "high",
+        },
+      }),
+    ]);
     mockCount.mockResolvedValue(1);
 
     const cb = makeCallback();
     await getNotifications(makeCall({ userId: USER }), cb);
 
     expect(cb.mock.calls[0][1].data[0]).toEqual({
-      id: "64b0000000000000000000aa",
-      title: "Test",
-      body: "Test body",
-      type: "general",
-      isRead: true,
+      id: "64b0000000000000000000bb",
+      title: "Leave",
+      body: "Approved",
+      type: "leave_notification",
+      isRead: false,
+      readAt: "",
+      link: "/attendance/view-leave-applications",
+      category: "leave",
+      priority: "high",
       createdAt: "2024-03-04T10:00:00.000Z",
+    });
+  });
+
+  it("reports a read notification as read, with when", async () => {
+    mockAggregate.mockResolvedValue([
+      makeRow({ readAt: { $date: "2024-03-05T08:00:00.000Z" } }),
+    ]);
+    mockCount.mockResolvedValue(1);
+
+    const cb = makeCallback();
+    await getNotifications(makeCall({ userId: USER }), cb);
+
+    expect(cb.mock.calls[0][1].data[0]).toMatchObject({
+      isRead: true,
+      readAt: "2024-03-05T08:00:00.000Z",
+      link: "",
     });
   });
 
@@ -142,7 +185,7 @@ describe("getNotifications", () => {
     });
   });
 
-  it("filters to the caller's recipients and applies unreadOnly", async () => {
+  it("unreadOnly narrows to notifications never read (raw null also matches a missing readAt)", async () => {
     mockAggregate.mockResolvedValue([]);
     mockCount.mockResolvedValue(0);
 
@@ -152,17 +195,28 @@ describe("getNotifications", () => {
     );
 
     expect(pipelineOf()[0]).toEqual({
-      $match: { userId: { $oid: USER }, isCleared: false },
+      $match: { userId: { $oid: USER }, isCleared: false, readAt: null },
+    });
+    expect(mockCount.mock.calls[0][0].where).toEqual({
+      userId: USER,
+      isCleared: false,
+      OR: [{ readAt: null }, { readAt: { isSet: false } }],
     });
   });
 
-  it("does not filter on isCleared when unreadOnly is false", async () => {
+  it("never returns cleared notifications, read or not", async () => {
     mockAggregate.mockResolvedValue([]);
     mockCount.mockResolvedValue(0);
 
     await getNotifications(makeCall({ userId: USER }), makeCallback());
 
-    expect(pipelineOf()[0]).toEqual({ $match: { userId: { $oid: USER } } });
+    expect(pipelineOf()[0]).toEqual({
+      $match: { userId: { $oid: USER }, isCleared: false },
+    });
+    expect(mockCount.mock.calls[0][0].where).toEqual({
+      userId: USER,
+      isCleared: false,
+    });
   });
 
   it("orders newest first, then paginates with page and limit", async () => {
@@ -182,20 +236,24 @@ describe("getNotifications", () => {
     expect(p[4].$lookup.from).toBe("notifications");
   });
 
-  it("always counts unread regardless of unreadOnly filter", async () => {
-    mockAggregate.mockResolvedValue([]);
-    mockCount.mockResolvedValue(0);
+  it.each([true, false])(
+    "counts unread as not cleared and never read (unreadOnly=%s)",
+    async (unreadOnly) => {
+      mockAggregate.mockResolvedValue([]);
+      mockCount.mockResolvedValue(0);
 
-    await getNotifications(
-      makeCall({ userId: USER, unreadOnly: true }),
-      makeCallback(),
-    );
+      await getNotifications(
+        makeCall({ userId: USER, unreadOnly }),
+        makeCallback(),
+      );
 
-    expect(mockCount.mock.calls[1][0].where).toEqual({
-      userId: USER,
-      isCleared: false,
-    });
-  });
+      expect(mockCount.mock.calls[1][0].where).toEqual({
+        userId: USER,
+        isCleared: false,
+        OR: [{ readAt: null }, { readAt: { isSet: false } }],
+      });
+    },
+  );
 
   it("returns INTERNAL on database error", async () => {
     mockAggregate.mockRejectedValue(new Error("DB error"));

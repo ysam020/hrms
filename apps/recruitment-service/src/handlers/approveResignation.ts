@@ -90,6 +90,8 @@ export const approveResignation = async (
         return notify({
           tenantId: getTenantId()!,
           event: "resignationApproved",
+          link: "/resignation-process/view-resignations",
+          category: "exit",
           recipients: updatedResignation.userId
             ? [updatedResignation.userId]
             : [],

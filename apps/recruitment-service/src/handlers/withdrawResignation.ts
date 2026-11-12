@@ -162,6 +162,8 @@ export const withdrawResignation = async (
         await notify({
           tenantId: tenantId!,
           event: "resignationWithdrawn",
+          link: "/resignation-process/view-resignations",
+          category: "exit",
           recipients: uniqueIds,
           pushTargets: uniqueUsernames,
           inApp: {

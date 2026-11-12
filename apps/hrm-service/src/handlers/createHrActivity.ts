@@ -50,6 +50,8 @@ export const createHrActivity = async (
         return notify({
           tenantId: getTenantId()!,
           event: "hrActivityCreated",
+          link: "/hr-activities",
+          category: "announcements",
           recipients: users.map((u) => u.id),
           pushTargets: users.map((u) => u.username),
           inApp: {
