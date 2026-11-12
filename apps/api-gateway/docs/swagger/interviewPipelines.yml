@@ -3,13 +3,18 @@ paths:
 
   /api/v1/interview-pipeline-templates:
     get:
+      operationId: listInterviewPipelineTemplates
       summary: List interview pipeline templates
       description: >-
         Returns all pipeline templates configured for the tenant, ordered
         with the default template first, then by creation date.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Interview Pipelines]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Templates retrieved
@@ -27,8 +32,17 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
     post:
+      operationId: createInterviewPipelineTemplate
       summary: Create an interview pipeline template
       description: >-
         Owners, admins, and HR only (or superusers, or a user holding the
@@ -38,9 +52,16 @@ paths:
         for the tenant. Templates are referenced by job openings via
         pipelineTemplateId and snapshotted onto each application at apply
         time.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Interview Pipelines]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -79,22 +100,39 @@ paths:
           description: Unauthorized
         "403":
           description: Forbidden — owner/admin/HR only, or no active tenant
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/interview-pipeline-templates/{id}:
     put:
+      operationId: updateInterviewPipelineTemplate
       summary: Update an interview pipeline template
       description: >-
         Owners, admins, and HR only. All fields are optional (partial
         update); setting isDefault true clears the flag on any other
         template for the tenant. isActive can be toggled independently.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Interview Pipelines]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -129,22 +167,39 @@ paths:
           description: Forbidden — owner/admin/HR only, or no active tenant
         "404":
           description: Template not found
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
     delete:
+      operationId: deleteInterviewPipelineTemplate
       summary: Remove an interview pipeline template
       description: >-
         Owners, admins, and HR only. Soft-delete: sets isActive and
         isDefault to false rather than deleting the row, so historical
         applications that reference this template via pipelineTemplateId
         remain valid.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Interview Pipelines]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Pipeline template removed
@@ -154,11 +209,20 @@ paths:
           description: Forbidden — owner/admin/HR only, or no active tenant
         "404":
           description: Template not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   # ── Application stage events ─────────────────────────────────────────────────
 
   /api/v1/applications/{id}/advance-stage:
     put:
+      operationId: advanceApplicationStage
       summary: Advance a candidate to a new pipeline stage
       description: >-
         Owners, admins, and HR only. Logs a new ApplicationStageEvent and
@@ -171,15 +235,21 @@ paths:
         recorded); an interview stage (one with an interviewerRole) requires
         scorecards or notes once a non-pending outcome is recorded. Blocked
         once the application is already Hired or Rejected.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Interview Pipelines]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
           description: Application id
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -233,14 +303,28 @@ paths:
           description: Forbidden — owner/admin/HR only, or no active tenant
         "404":
           description: Application not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/applications/{id}/stage-events:
     get:
+      operationId: listApplicationStageEvents
       summary: List an application's stage-event history
-      description: Returns all ApplicationStageEvent records for the application, ordered by stageOrder ascending.
+      description: >-
+        Returns all ApplicationStageEvent records for the application, ordered by stageOrder ascending.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Interview Pipelines]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -264,9 +348,18 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/applications/bulk-advance-stage:
     post:
+      operationId: bulkAdvanceStage
       summary: Bulk advance multiple candidates to a new stage
       description: >-
         Owners, admins, and HR only. For manufacturing/BPO-style bulk hiring
@@ -275,9 +368,16 @@ paths:
         scorecard validation that advance-stage does. Applications already
         Hired/Rejected, or belonging to another tenant, are silently dropped
         from the batch rather than failing the whole request.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Interview Pipelines]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -315,16 +415,32 @@ paths:
           description: Unauthorized
         "403":
           description: Forbidden — owner/admin/HR only, or no active tenant
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   # ── Offers ───────────────────────────────────────────────────────────────────
 
   /api/v1/applications/{id}/offers:
     get:
+      operationId: listOffers
       summary: List an application's offer versions
-      description: Returns all Offer records for the application, newest version first.
+      description: >-
+        Returns all Offer records for the application, newest version first.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Interview Pipelines]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -348,22 +464,37 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
     post:
+      operationId: createOffer
       summary: Create (or revise) an offer for a candidate
       description: >-
         Owners, admins, and HR only. Creates the next version for this
         application — version 1 for a fresh offer, or version N+1 to record
         a revised/counter offer against the latest existing version.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Interview Pipelines]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
           description: Application id
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -395,23 +526,40 @@ paths:
           description: Forbidden — owner/admin/HR only, or no active tenant
         "404":
           description: Application not found
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/offers/{id}/status:
     put:
+      operationId: updateOfferStatus
       summary: Update an offer's status
       description: >-
         Any authenticated tenant member (no privileged-role check beyond
         tenant membership). Setting status to "Sent" stamps sentAt; setting
         it to "Accepted" or "Declined" stamps respondedAt.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Interview Pipelines]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
           description: Offer id
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -450,6 +598,16 @@ paths:
           description: No active tenant
         "404":
           description: Offer not found
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
 components:
   schemas:

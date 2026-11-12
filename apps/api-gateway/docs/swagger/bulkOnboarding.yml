@@ -1,6 +1,7 @@
 paths:
   /api/v1/bulk-onboarding/template:
     get:
+      operationId: downloadOnboardingTemplate
       summary: Download the bulk onboarding CSV template
       description: >-
         Streams a freshly-generated CSV (Content-Type text/csv, as an
@@ -8,9 +9,13 @@ paths:
         Generated on demand from the import spec rather than a static file,
         so the template never drifts out of sync with what /validate and
         /commit expect. Requires HR/owner/admin/superuser (requireHrPrivileged).
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner, admin, HR or superuser only (requireHrPrivileged).
       tags: [Bulk Onboarding]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: CSV template file
@@ -23,9 +28,18 @@ paths:
           description: Unauthorized
         "403":
           description: Caller is not HR/owner/admin/superuser
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/bulk-onboarding/upload-url:
     post:
+      operationId: getOnboardingImportUploadUrl
       summary: Get a pre-signed S3 upload URL for the filled-in CSV
       description: >-
         Same presigned-PUT pattern used for resume uploads — the browser
@@ -34,9 +48,16 @@ paths:
         gate since `.csv` MIME types vary widely across browsers/OSes.
         Requires HR/owner/admin/superuser. The returned `key` is passed to
         /validate and /commit.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner, admin, HR or superuser only (requireHrPrivileged).
       tags: [Bulk Onboarding]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -78,9 +99,18 @@ paths:
           description: Unauthorized
         "403":
           description: Caller is not HR/owner/admin/superuser
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/bulk-onboarding/validate:
     post:
+      operationId: validateOnboardingImport
       summary: Validate an uploaded onboarding workbook
       description: >-
         Report-only — fetches the CSV from S3 by `key`, parses it, and
@@ -88,9 +118,16 @@ paths:
         Email" values within the sheet, and emails that already belong to an
         existing account) without writing anything to the database. Requires
         HR/owner/admin/superuser.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner, admin, HR or superuser only (requireHrPrivileged).
       tags: [Bulk Onboarding]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -137,9 +174,20 @@ paths:
           description: Unauthorized
         "403":
           description: Caller is not HR/owner/admin/superuser
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/bulk-onboarding/commit:
     post:
+      operationId: commitOnboardingImport
       summary: Commit a validated onboarding workbook
       description: >-
         Re-runs the same full validation as /validate against a fresh S3
@@ -152,9 +200,16 @@ paths:
         gross salary). There is no cross-service transaction, so a failure on
         an individual row after validation passed is reported per-row rather
         than rolling back the whole batch. Requires HR/owner/admin/superuser.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner, admin, HR or superuser only (requireHrPrivileged).
       tags: [Bulk Onboarding]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -221,3 +276,11 @@ paths:
           description: Unauthorized
         "403":
           description: Caller is not HR/owner/admin/superuser
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"

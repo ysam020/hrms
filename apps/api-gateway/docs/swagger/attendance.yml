@@ -1,6 +1,7 @@
 paths:
   /api/v1/add-attendance:
     post:
+      operationId: addAttendance
       summary: Check in or check out
       description: >-
         Marks a check-in or check-out for the authenticated user. Geofencing
@@ -12,9 +13,16 @@ paths:
         for any time worked beyond the standard day. A half-day is derived
         automatically when workingHours falls under the tenant's
         halfDayMinHours threshold.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Attendance]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -43,6 +51,14 @@ paths:
                 imageUrl:
                   type: string
                   example: "https://cdn.example.com/checkins/abc123.jpg"
+                faceAttestation:
+                  type: string
+                  maxLength: 128
+                  description: >-
+                    Single-use attestation from POST
+                    /attendance/face/verify (valid 120 s). Required only when
+                    the server runs with ATTENDANCE_FACE_ATTESTATION=enforce;
+                    otherwise ignored.
       responses:
         "200":
           description: Attendance marked
@@ -60,14 +76,33 @@ paths:
           description: Invalid attendance type, or geofence/leave-conflict rejection
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          description: "code FACE_ATTESTATION_REQUIRED — face verification is required to mark attendance (enforce mode, missing/used/expired faceAttestation). Also returned by the access guards (PENDING_TENANT_SETUP, invalid CSRF token)."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-attendances/{year}/{month}:
     get:
+      operationId: getAttendances
       summary: Get own attendance for a month
-      description: Returns the authenticated user's attendance records for the given calendar month (UTC month bounds), including per-day check-in/check-out, status, and computed work hours.
+      description: >-
+        Returns the authenticated user's attendance records for the given calendar month (UTC month bounds), including per-day check-in/check-out, status, and computed work hours.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Attendance]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: year
           in: path
@@ -102,9 +137,20 @@ paths:
                         workHours: { type: number, example: 8.5 }
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-all-attendances/{year}/{month}:
     get:
+      operationId: getAllAttendances
       summary: Get all employees' attendance for a month
       description: >-
         Owners/admins/HR/superusers get every active employee's monthly
@@ -112,9 +158,13 @@ paths:
         leaves), searchable by username/first/last name. Non-privileged
         callers get back only their own row, ignoring the search param.
         Paginated.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Attendance]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: year
           in: path
@@ -174,9 +224,20 @@ paths:
                           totalPages: { type: integer, example: 1 }
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/attendance-correction:
     put:
+      operationId: attendanceCorrection
       summary: Correct an attendance record
       description: >-
         Regularizes a check-in/check-out for a given date. Employees may only
@@ -184,9 +245,16 @@ paths:
         regularizationBackdateWindowDays (default 3 days); owners/admins/HR/
         superusers are exempt from both restrictions and may correct any
         user's record for any date.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Attendance]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -222,9 +290,18 @@ paths:
           description: Unauthorized
         "403":
           description: Forbidden — correcting another user's record without privileged role
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-attendance-summary/{userId}/{year}/{month}:
     get:
+      operationId: getAttendanceSummary
       summary: Get attendance summary for a user
       description: >-
         Returns a per-status day count (presents/late/half days/leaves/week
@@ -233,9 +310,13 @@ paths:
         (ATTENDANCE_CORRECTIONS_PER_MONTH, default 3). For the current month,
         only counts through today. Callers may only view their own summary
         unless privileged (owner/admin/HR/superuser).
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Attendance]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: userId
           in: path
@@ -290,9 +371,18 @@ paths:
           description: Unauthorized
         "403":
           description: Forbidden — viewing another user's summary without privileged role
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/attendance-insights:
     get:
+      operationId: attendanceInsights
       summary: Organization-wide attendance insights
       description: >-
         Owners/admins/HR/superusers only (requireHrPrivileged). Returns
@@ -301,9 +391,13 @@ paths:
         attendance rate, correction frequency, and low average hours),
         per-department performance, weekly trend direction, and peak
         check-in hours, for a selectable period.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner, admin, HR or superuser only (requireHrPrivileged).
       tags: [Attendance]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: period
           in: query
@@ -391,24 +485,39 @@ paths:
           description: Unauthorized
         "403":
           description: Forbidden — requires owner/admin/HR role or superuser
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/attendance/{recordId}/breaks:
     post:
+      operationId: startBreak
       summary: Start a break
       description: >-
         Starts a timed break (lunch/short_break/other) against today's
         attendance record. Only one open break is allowed per record at a
         time. Employees may only log breaks on their own record; owners/
         admins/HR/superusers may start a break on any user's record.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Attendance]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: recordId
           in: path
           required: true
           schema: { type: string }
           example: "665f1c2e8a1b2c0012a3b789"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: false
         content:
@@ -444,23 +553,38 @@ paths:
           description: Forbidden — logging a break on another user's record without privileged role
         "404":
           description: Attendance record not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/attendance/breaks/{id}/end:
     put:
+      operationId: endBreak
       summary: End a break
       description: >-
         Ends an in-progress break and records its durationMinutes. Employees
         may only end their own break; owners/admins/HR/superusers may end any
         user's break.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Attendance]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
           example: "665f1c2e8a1b2c0012a3bc12"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Break ended
@@ -482,3 +606,11 @@ paths:
           description: Forbidden — ending another user's break without privileged role
         "404":
           description: Break not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"

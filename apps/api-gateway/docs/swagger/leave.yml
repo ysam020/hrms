@@ -1,6 +1,7 @@
 paths:
   /api/v1/add-leave:
     post:
+      operationId: addLeave
       summary: Apply for leave
       description: >-
         Submits a leave application for the authenticated employee.
@@ -10,9 +11,16 @@ paths:
         "short_leave" requires shortLeaveHours (0.5-7). Every application is
         instantiated against the tenant's Approval Chain for the "leave"
         module at apply time.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Leave]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -69,18 +77,33 @@ paths:
           description: Insufficient leave balance, invalid date range, or missing session/shortLeaveHours for the chosen unit
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-leave-applications:
     get:
+      operationId: getLeaveApplications
       summary: Get leave applications
       description: >-
         Employees see only their own applications. Owners/admins/HR/
         superusers (privileged) may pass userId to view a specific user's
         applications, or search to look up a user by username. Each record
         is enriched with username/firstName/lastName. Paginated.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Leave]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: userId
           in: query
@@ -139,9 +162,20 @@ paths:
                         shortLeaveHours: { type: number }
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/update-leave-status:
     put:
+      operationId: updateLeaveStatus
       summary: Approve, reject, or cancel a leave application
       description: >-
         approve/reject are recorded against the leave's Approval Chain
@@ -152,9 +186,16 @@ paths:
         Approved one instead has cancellation requested and routed through
         the same Approval Chain. A privileged caller may cancel on another
         user's behalf by omitting the ownership check.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Leave]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -190,9 +231,18 @@ paths:
           description: Unauthorized
         "403":
           description: Forbidden — not the resolved approver and not privileged
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/bulk-update-leave-status:
     put:
+      operationId: bulkUpdateLeaveStatus
       summary: Bulk approve or reject leave applications
       description: >-
         Approves or rejects up to 200 leave applications in one call. cancel
@@ -201,9 +251,16 @@ paths:
         Approval Chain mechanism as update-leave-status, so one already-
         decided application doesn't fail the whole batch; per-id failures are
         returned in the response instead of aborting.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Leave]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -252,21 +309,72 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
-  /api/v1/get-available-paid-leaves/{userId}:
+  # The route is /get-available-paid-leaves/:userId? (optional param). OpenAPI
+  # path parameters are always required, so it is documented as two paths.
+  /api/v1/get-available-paid-leaves:
     get:
-      summary: Get available paid leave balance
+      operationId: getMyAvailablePaidLeaves
+      summary: Get my available paid leave balance
       description: >-
-        Returns the leave balance summary for a user. userId is optional and
-        only honored for superusers looking up someone else's balance —
-        everyone else always gets their own.
+        Returns the caller's own leave balance summary (same handler as
+        /get-available-paid-leaves/{userId} without the userId).
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Leave]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Leave balance retrieved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LeaveBalanceResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/get-available-paid-leaves/{userId}:
+    get:
+      operationId: getAvailablePaidLeaves
+      summary: Get available paid leave balance
+      description: >-
+        Returns the leave balance summary for a user. userId is only honored
+        for superusers (isSuperUser) looking up someone else's balance —
+        everyone else always gets their own. Omit the segment entirely to
+        read your own (GET /get-available-paid-leaves).
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
+      tags: [Leave]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: userId
           in: path
-          required: false
+          required: true
           schema: { type: string }
           example: "665f1c2e8a1b2c0012a3b456"
           description: Superuser only; ignored for non-superusers, who always get their own balance.
@@ -275,20 +383,33 @@ paths:
           description: Leave balance retrieved
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  success: { type: boolean, example: true }
-                  message: { type: string, example: "Leave balance fetched" }
-                  data:
-                    type: object
-                    properties:
-                      id: { type: string }
-                      userId: { type: string }
-                      accumulatedPlBeforeCurrentMonth:
-                        { type: number, example: 2 }
-                      balances:
-                        type: string
-                        description: JSON-encoded per-leave-type summary (available/used/carried-forward days).
+              schema: { $ref: "#/components/schemas/LeaveBalanceResponse" }
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+components:
+  schemas:
+    LeaveBalanceResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string, example: "Leave balance fetched" }
+        data:
+          type: object
+          properties:
+            id: { type: string }
+            userId: { type: string }
+            accumulatedPlBeforeCurrentMonth: { type: number, example: 2 }
+            balances:
+              type: string
+              description: JSON-encoded per-leave-type summary (available/used/carried-forward days).

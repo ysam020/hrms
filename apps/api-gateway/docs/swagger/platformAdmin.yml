@@ -1,0 +1,816 @@
+# Praesto Platform Console (src/routes/platformAdmin.ts, handlers/platformAdmin.ts,
+# services/platformMetrics.ts). Mounted at /api/v1/platform/admin behind
+# authenticate + idempotency; each route then requires one PraestoAdmin
+# action via requirePlatformAdmin(action), which only users of Praesto's own
+# organisation (PLATFORM_TENANT_ID) can hold. No tenant subscription check.
+# Unexpected failures return 500 { success: false, message } from fail().
+components:
+  parameters:
+    PlatformRange:
+      name: range
+      in: query
+      description: Preset reporting window; ignored when from/to are given.
+      schema: { type: string, enum: ["30d", "90d", "12m", ytd, all] }
+    PlatformFrom:
+      name: from
+      in: query
+      description: Start date (YYYY-MM-DD, IST).
+      schema:
+        {
+          type: string,
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+          example: "2026-10-01",
+        }
+    PlatformTo:
+      name: to
+      in: query
+      description: End date inclusive (YYYY-MM-DD, IST).
+      schema:
+        {
+          type: string,
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+          example: "2026-10-31",
+        }
+    PlatformPage:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 10000, default: 1 }
+    PlatformLimit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+  schemas:
+    PlatformSyncRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 5
+          maxLength: 500
+          description: Recorded in the platform audit log.
+          example: "Customer reports renewal not reflected"
+    PlatformRangeOut:
+      type: object
+      description: The resolved reporting window (rangeOut).
+      additionalProperties: true
+    PlatformPayment:
+      type: object
+      properties:
+        id: { type: string }
+        razorpayPaymentId: { type: string, example: "pay_EXAMPLE000001" }
+        tenantId: { type: string }
+        tenantName: { type: string }
+        subscriptionId: { type: string, nullable: true }
+        invoiceId: { type: string, nullable: true }
+        amount: { type: integer, description: Paise. }
+        currency: { type: string, example: INR }
+        status:
+          type: string
+          description: Normalised state (captured, failed, refunded, pending).
+        providerStatus: { type: string, description: Razorpay's own status. }
+        method: { type: string, nullable: true }
+        amountRefunded: { type: integer }
+        refundStatus: { type: string, nullable: true }
+        errorCode: { type: string, nullable: true }
+        errorDescription: { type: string, nullable: true }
+        planTier: { type: string, nullable: true }
+        billing: { type: string, nullable: true }
+    PlatformAuditEntry:
+      type: object
+      properties:
+        id: { type: string }
+        at: { type: string, format: date-time }
+        actorId: { type: string, nullable: true }
+        actor: { type: string, nullable: true }
+        action: { type: string, example: "subscription.sync" }
+        description: { type: string }
+        targetTenantId: { type: string, nullable: true }
+        targetTenantName: { type: string, nullable: true }
+        reason: { type: string, nullable: true }
+        result: { type: string, nullable: true, enum: [success, failure, null] }
+        details: { type: object, nullable: true }
+        requestId: { type: string, nullable: true }
+
+paths:
+  /api/v1/platform/admin/overview:
+    get:
+      operationId: getPlatformOverview
+      summary: Platform overview metrics
+      description: >-
+        Requires PraestoAdmin:view_overview. Billing figures are included only
+        when the caller also holds view_billing. Aggregates are computed in
+        services/platformMetrics.ts; the nested series objects are not fully
+        specified here.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); PraestoAdmin:view_overview (Praesto's own organisation only).
+      tags: [Platform Console]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PlatformRange"
+        - $ref: "#/components/parameters/PlatformFrom"
+        - $ref: "#/components/parameters/PlatformTo"
+      responses:
+        "200":
+          description: Overview
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      range: { $ref: "#/components/schemas/PlatformRangeOut" }
+                      generatedAt: { type: string, format: date-time }
+                      tenants:
+                        type: object
+                        properties:
+                          total: { type: integer }
+                          newInRange: { type: integer }
+                          newPrevious: { type: integer }
+                          growth: { type: number, nullable: true }
+                          withAccess: { type: integer }
+                          withoutAccess: { type: integer }
+                          accountActive: { type: integer }
+                          accountInactive: { type: integer }
+                          signedInInRange: { type: integer }
+                          registrations:
+                            { type: array, items: { type: object } }
+                      employees:
+                        type: object
+                        properties:
+                          records: { type: integer }
+                          active: { type: integer }
+                          inactive: { type: integer }
+                          activeInTenantsWithAccess: { type: integer }
+                          averagePerTenant: { type: number }
+                          userAccounts: { type: integer }
+                          addedInRange: { type: integer }
+                          addedPrevious: { type: integer }
+                          growth: { type: number, nullable: true }
+                          added: { type: array, items: { type: object } }
+                      subscriptions:
+                        {
+                          type: object,
+                          description: Counts by subscription state.,
+                        }
+                      trials:
+                        {
+                          type: object,
+                          description: Trial conversion in the range.,
+                        }
+                      conversions: { type: array, items: { type: object } }
+                      billing:
+                        {
+                          type: object,
+                          nullable: true,
+                          description: Present only with view_billing.,
+                        }
+                      unavailable:
+                        {
+                          type: array,
+                          items: { type: string },
+                          description: Metrics not collected yet.,
+                        }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/platform/admin/tenants:
+    get:
+      operationId: listPlatformTenants
+      summary: List customer organisations
+      description: >-
+        Requires view_tenants. Filtering by payment, and latestPayment in each
+        row, need view_billing as well. Praesto's own organisation is excluded.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); PraestoAdmin:view_tenants (Praesto's own organisation only).
+      tags: [Platform Console]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PlatformPage"
+        - $ref: "#/components/parameters/PlatformLimit"
+        - name: search
+          in: query
+          description: Name or slug contains.
+          schema: { type: string, maxLength: 100 }
+        - name: status
+          in: query
+          schema:
+            {
+              type: string,
+              enum:
+                [
+                  trialing,
+                  active,
+                  grace_period,
+                  cancelled,
+                  cancelling,
+                  expired,
+                ],
+            }
+        - name: plan
+          in: query
+          schema: { type: string, enum: [starter, growth, enterprise] }
+        - name: kind
+          in: query
+          schema: { type: string, enum: [trial, paid, never_paid] }
+        - name: account
+          in: query
+          schema: { type: string, enum: [active, inactive] }
+        - name: access
+          in: query
+          schema: { type: string, enum: ["yes", "no"] }
+        - name: payment
+          in: query
+          description: Latest payment state; needs view_billing.
+          schema: { type: string, enum: [captured, failed, refunded, none] }
+        - name: registeredFrom
+          in: query
+          schema: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+        - name: registeredTo
+          in: query
+          schema: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+        - name: minEmployees
+          in: query
+          schema: { type: integer, minimum: 0 }
+        - name: maxEmployees
+          in: query
+          schema: { type: integer, minimum: 0 }
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum:
+              [created_desc, created_asc, name_asc, employees_desc, renewal_asc]
+            default: created_desc
+      responses:
+        "200":
+          description: One page of organisations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      tenants:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: string }
+                            name: { type: string, example: "Acme Industries" }
+                            slug: { type: string, example: "acme" }
+                            createdAt: { type: string, format: date-time }
+                            isActive: { type: boolean }
+                            subscriptionStatus: { type: string, nullable: true }
+                            planTier: { type: string, nullable: true }
+                            billing: { type: string, nullable: true }
+                            kind:
+                              { type: string, enum: [trial, paid, never_paid] }
+                            hasAccess: { type: boolean }
+                            planActivatedAt:
+                              {
+                                type: string,
+                                format: date-time,
+                                nullable: true,
+                              }
+                            planExpiresAt:
+                              {
+                                type: string,
+                                format: date-time,
+                                nullable: true,
+                              }
+                            trialEndsAt:
+                              {
+                                type: string,
+                                format: date-time,
+                                nullable: true,
+                              }
+                            employees: { type: integer }
+                            activeEmployees: { type: integer }
+                            members: { type: integer }
+                            lastSignInAt:
+                              {
+                                type: string,
+                                format: date-time,
+                                nullable: true,
+                              }
+                            latestPayment:
+                              type: object
+                              nullable: true
+                              description: Only with view_billing.
+                      totalCount: { type: integer }
+                      page: { type: integer }
+                      generatedAt: { type: string, format: date-time }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Missing view_tenants, or payment filter without view_billing ("Filtering by payment needs billing access.")
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/platform/admin/tenants/{tenantId}:
+    get:
+      operationId: getPlatformTenant
+      summary: Get one customer organisation
+      description: >-
+        Requires view_tenants. Organisation profile, owner, workforce counts,
+        subscription state, recent module usage (counts only, no records),
+        support tickets and platform audit entries. payments is null without
+        view_billing.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); PraestoAdmin:view_tenants (Praesto's own organisation only).
+      tags: [Platform Console]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[a-f0-9]{24}$" }
+      responses:
+        "200":
+          description: Organisation detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      organisation:
+                        type: object
+                        properties:
+                          id: { type: string }
+                          name: { type: string }
+                          slug: { type: string }
+                          createdAt: { type: string, format: date-time }
+                          isActive: { type: boolean }
+                          industry: { type: string, nullable: true }
+                          companySize: { type: string, nullable: true }
+                          domain: { type: string, nullable: true }
+                          website: { type: string, nullable: true }
+                          helpEmail: { type: string, nullable: true }
+                          helpPhone: { type: string, nullable: true }
+                          owner: { type: object, nullable: true }
+                      workforce:
+                        type: object
+                        properties:
+                          records: { type: integer }
+                          active: { type: integer }
+                          inactive: { type: integer }
+                          byStatus:
+                            {
+                              type: object,
+                              additionalProperties: { type: integer },
+                            }
+                          userAccounts: { type: integer }
+                      subscription:
+                        type: object
+                        properties:
+                          status: { type: string, nullable: true }
+                          hasAccess: { type: boolean }
+                          kind:
+                            { type: string, enum: [trial, paid, never_paid] }
+                          planTier: { type: string, nullable: true }
+                          billing: { type: string, nullable: true }
+                          monthlyValue:
+                            {
+                              type: integer,
+                              description: "Paise per month while paying, else 0.",
+                            }
+                          trialStartedAt:
+                            { type: string, format: date-time, nullable: true }
+                          trialEndsAt:
+                            { type: string, format: date-time, nullable: true }
+                          activatedAt:
+                            { type: string, format: date-time, nullable: true }
+                          currentPeriodEndsAt:
+                            { type: string, format: date-time, nullable: true }
+                          pendingPlanTier: { type: string, nullable: true }
+                          pendingBilling: { type: string, nullable: true }
+                          pendingChangeAt:
+                            { type: string, format: date-time, nullable: true }
+                          hasRazorpaySubscription: { type: boolean }
+                      payments:
+                        type: array
+                        nullable: true
+                        items: { $ref: "#/components/schemas/PlatformPayment" }
+                      usage:
+                        {
+                          type: object,
+                          description: "Last sign-in, open support tickets and 30-day module activity counts.",
+                        }
+                      audit:
+                        type: array
+                        items:
+                          { $ref: "#/components/schemas/PlatformAuditEntry" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/platform/admin/tenants/{tenantId}/sync:
+    post:
+      operationId: syncPlatformTenant
+      summary: Re-sync one organisation's subscription from Razorpay
+      description: >-
+        Requires manage_billing. Reconciles the subscription state (for
+        trialing, active, grace_period and cancelling organisations) and
+        records any missing payments in the ledger. Idempotent; audited as
+        subscription.sync with the given reason.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); PraestoAdmin:manage_billing (Praesto's own organisation only).
+      tags: [Platform Console]
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[a-f0-9]{24}$" }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PlatformSyncRequest" }
+      responses:
+        "200":
+          description: Synced
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    type: string
+                    example: "Synced — subscription state already matched Razorpay."
+                  data:
+                    type: object
+                    properties:
+                      reconciled: { type: boolean }
+                      paymentsRecorded: { type: integer }
+                      changed:
+                        type: object
+                        description: Field -> { from, to } for every state field that changed.
+                        additionalProperties:
+                          type: object
+                          properties:
+                            from: {}
+                            to: {}
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Organisation not found (or Praesto's own)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "409":
+          description: The organisation has no Razorpay subscription to sync
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "500":
+          description: Razorpay unreachable or refused the request (audited as a failure)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/platform/admin/subscriptions:
+    get:
+      operationId: getPlatformSubscriptions
+      summary: Subscription health
+      description: >-
+        Requires view_billing. Counts by state, MRR summary, trial conversion and lists of organisations past due, renewing soon or ending soon.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); PraestoAdmin:view_billing (Praesto's own organisation only).
+      tags: [Platform Console]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PlatformRange"
+        - $ref: "#/components/parameters/PlatformFrom"
+        - $ref: "#/components/parameters/PlatformTo"
+      responses:
+        "200":
+          description: Subscription metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      range: { $ref: "#/components/schemas/PlatformRangeOut" }
+                      counts: { type: object }
+                      mrr: { type: object }
+                      trials: { type: object }
+                      lists:
+                        type: object
+                        properties:
+                          pastDue: { type: array, items: { type: object } }
+                          renewingSoon: { type: array, items: { type: object } }
+                          endingSoon: { type: array, items: { type: object } }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/platform/admin/payments:
+    get:
+      operationId: listPlatformPayments
+      summary: Payment ledger
+      description: >-
+        Requires view_billing. Lists recorded Razorpay payments and reports ledger coverage.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); PraestoAdmin:view_billing (Praesto's own organisation only).
+      tags: [Platform Console]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PlatformPage"
+        - $ref: "#/components/parameters/PlatformLimit"
+        - name: search
+          in: query
+          schema: { type: string, maxLength: 100 }
+        - name: status
+          in: query
+          schema: { type: string, enum: [captured, failed, refunded, pending] }
+        - name: tenantId
+          in: query
+          schema: { type: string, pattern: "^[a-f0-9]{24}$" }
+        - $ref: "#/components/parameters/PlatformFrom"
+        - $ref: "#/components/parameters/PlatformTo"
+      responses:
+        "200":
+          description: One page of payments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      payments:
+                        type: array
+                        items: { $ref: "#/components/schemas/PlatformPayment" }
+                      totalCount: { type: integer }
+                      page: { type: integer }
+                      ledger:
+                        {
+                          type: object,
+                          description: How far the local ledger has been synced.,
+                        }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/platform/admin/billing/sync:
+    post:
+      operationId: syncAllPlatformPayments
+      summary: Sync the payment ledger for every organisation
+      description: >-
+        Requires manage_billing. One run at a time (Redis lock, 15 minutes).
+        Per-organisation failures don't stop the run and are listed in
+        data.failed; audited as billing.sync_all.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); PraestoAdmin:manage_billing (Praesto's own organisation only).
+      tags: [Platform Console]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PlatformSyncRequest" }
+      responses:
+        "200":
+          description: Sync finished
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    {
+                      type: string,
+                      example: "Synced 12 payment(s) across 40 organisation(s).",
+                    }
+                  data:
+                    type: object
+                    properties:
+                      tenants: { type: integer }
+                      paymentsRecorded: { type: integer }
+                      failed:
+                        {
+                          type: array,
+                          items: { type: string },
+                          description: Tenant ids that failed.,
+                        }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: A payment sync is already running
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/platform/admin/revenue:
+    get:
+      operationId: getPlatformRevenue
+      summary: Revenue metrics
+      description: >-
+        Requires view_billing. Collections vs the previous period, net revenue by month, plan and billing cycle, ARPA, MRR and billed MRR.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); PraestoAdmin:view_billing (Praesto's own organisation only).
+      tags: [Platform Console]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PlatformRange"
+        - $ref: "#/components/parameters/PlatformFrom"
+        - $ref: "#/components/parameters/PlatformTo"
+      responses:
+        "200":
+          description: Revenue metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      range: { $ref: "#/components/schemas/PlatformRangeOut" }
+                      collections: { type: object }
+                      previousCollections: { type: object }
+                      byMonth: { type: array, items: { type: object } }
+                      byPlan: { type: array, items: { type: object } }
+                      byBilling: { type: array, items: { type: object } }
+                      arpa: { type: object }
+                      mrr: { type: object }
+                      billedMrr:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            key: { type: string, example: "2026-10" }
+                            value: { type: integer }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/platform/admin/audit-logs:
+    get:
+      operationId: listPlatformAuditLogs
+      summary: Platform console audit log
+      description: >-
+        Requires view_audit_logs. Every console action (syncs, lead changes) with actor, target, reason and result.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); PraestoAdmin:view_audit_logs (Praesto's own organisation only).
+      tags: [Platform Console]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PlatformPage"
+        - $ref: "#/components/parameters/PlatformLimit"
+      responses:
+        "200":
+          description: One page of entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      entries:
+                        type: array
+                        items:
+                          { $ref: "#/components/schemas/PlatformAuditEntry" }
+                      totalCount: { type: integer }
+                      page: { type: integer }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"

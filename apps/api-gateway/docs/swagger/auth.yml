@@ -1,6 +1,7 @@
 paths:
   /api/v1/csrf-token:
     get:
+      operationId: getApiV1CsrfToken
       summary: Fetch CSRF token
       description: >
         Returns a CSRF token derived from the server-side secret. The token must
@@ -8,7 +9,11 @@ paths:
         DELETE). The client Axios interceptor calls this lazily on the first
         mutation and caches the result; it is invalidated on logout or 403.
         Mounted directly in server.ts (not through a route file).
+
+
+        Access: public — no authentication.
       tags: [Authentication]
+      security: []
       responses:
         "200":
           description: CSRF token
@@ -18,17 +23,24 @@ paths:
                 type: object
                 properties:
                   csrfToken: { type: string, example: "9a3f...d2" }
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
   /api/v1/profile:
     get:
+      operationId: getProfile
       summary: Get authenticated user profile
       description: >
         Returns the full profile of the currently authenticated user, including
         decrypted PII fields, salary-adjacent flags, and active tenant context
         (`tenantName`, `tenantSlug`, `tenantRole`, `wfhEnabled`).
+
+
+        Access: authenticated (bearer token or `access_token` cookie).
       tags: [Authentication]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Profile fetched
@@ -100,9 +112,16 @@ paths:
           description: Unauthorized
         "404":
           description: User not found
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/refresh-token:
     post:
+      operationId: refreshToken
       summary: Refresh access token
       description: >
         Issues a new access token from a valid refresh token. Web clients send
@@ -111,7 +130,13 @@ paths:
         instead. On success, the response rotates the `refresh_token` cookie
         for web callers and echoes the plain refresh token back to the caller
         only when it was supplied in the body (mobile).
+
+
+        Access: public — no authentication.
       tags: [Authentication]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      security: []
       requestBody:
         required: false
         content:
@@ -143,14 +168,37 @@ paths:
                         description: Only present when the request supplied a body refreshToken (mobile).
         "401":
           description: Invalid, expired, or missing refresh token
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          description: >-
+            code SESSION_CHECK_UNAVAILABLE — auth-service could not verify the
+            session (Redis/Mongo down or slow) and left it untouched. Keep the
+            refresh cookie and retry after Retry-After (5 s); only 401 means
+            the session is gone.
+          headers:
+            Retry-After: { schema: { type: integer, example: 5 } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
 
   /api/v1/logout:
     get:
+      operationId: logout
       summary: Logout current session
-      description: Invalidates the current session server-side and clears the refresh_token cookie.
+      description: >-
+        Invalidates the current session server-side and clears the refresh_token cookie.
+
+
+        Access: authenticated (bearer token or `access_token` cookie).
       tags: [Authentication]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Logout successful
@@ -163,16 +211,27 @@ paths:
                   message: { type: string, example: "Logout successful" }
         "401":
           description: Unauthorized
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/auth/google:
     get:
+      operationId: googleAuthRedirect
       summary: Initiate Google OAuth login
       description: >
         Redirects the user to Google's OAuth 2.0 authorization page. This is a
         browser redirect, not an AJAX endpoint. Pass `platform=mobile` with a
         `redirect_uri` (must be `exp://` or `hrms://`) to have the callback hand
         tokens back via app deep link instead of a web redirect.
+
+
+        Access: public — no authentication.
       tags: [Authentication]
+      security: []
       parameters:
         - name: platform
           in: query
@@ -186,14 +245,22 @@ paths:
       responses:
         "302":
           description: Redirect to Google's OAuth authorization page
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
   /api/v1/webauthn-register:
     get:
+      operationId: webAuthnRegisterOptions
       summary: Get WebAuthn registration options
-      description: Returns PublicKeyCredentialCreationOptions to begin passkey registration.
+      description: >-
+        Returns PublicKeyCredentialCreationOptions to begin passkey registration.
+
+
+        Access: authenticated (bearer token or `access_token` cookie).
       tags: [WebAuthn]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Registration options returned
@@ -210,16 +277,29 @@ paths:
           description: Failed to generate registration options
         "401":
           description: Unauthorized
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
     post:
+      operationId: webAuthnRegister
       summary: Get WebAuthn registration options (duplicate RPC call)
       description: >
         Authenticated variant that calls the same auth-service
         `WebAuthnRegistrationOptions` RPC as the GET on this path, but returns
         the raw gRPC response spread at the top level (not nested under `data`).
         No request body is read.
+
+
+        Access: authenticated (bearer token or `access_token` cookie).
       tags: [WebAuthn]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
       responses:
         "200":
           description: Registration options returned
@@ -236,14 +316,30 @@ paths:
                     description: JSON-encoded PublicKeyCredentialCreationOptions
         "401":
           description: Unauthorized
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/webauthn-verify-registration:
     post:
+      operationId: webAuthnVerifyRegistration
       summary: Verify WebAuthn registration
-      description: Verifies the attestation response and saves the credential for the authenticated user.
+      description: >-
+        Verifies the attestation response and saves the credential for the authenticated user.
+
+
+        Access: authenticated (bearer token or `access_token` cookie).
       tags: [WebAuthn]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
       requestBody:
         required: true
         content:
@@ -280,14 +376,28 @@ paths:
           description: Invalid request body
         "401":
           description: Unauthorized
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/webauthn-credentials:
     get:
+      operationId: getWebAuthnCredentials
       summary: Get WebAuthn credentials
-      description: Returns all registered passkey credentials for the authenticated user.
+      description: >-
+        Returns all registered passkey credentials for the authenticated user.
+
+
+        Access: authenticated (bearer token or `access_token` cookie).
       tags: [WebAuthn]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Credentials retrieved
@@ -317,12 +427,26 @@ paths:
                             deviceInfo: { type: object, nullable: true }
         "401":
           description: Unauthorized
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/webauthn-credential-check:
     post:
+      operationId: webAuthnCredentialCheck
       summary: Check if WebAuthn credentials exist for a username
-      description: Returns whether at least one passkey is enrolled for the given username. Not authenticated (used on the login screen before sign-in).
+      description: >-
+        Returns whether at least one passkey is enrolled for the given username. Not authenticated (used on the login screen before sign-in).
+
+
+        Access: public — no authentication.
       tags: [WebAuthn]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      security: []
       requestBody:
         required: true
         content:
@@ -348,17 +472,30 @@ paths:
                   hasCredentials: { type: boolean, example: true }
         "400":
           description: Missing or invalid username
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
 
   /api/v1/disable-webauthn:
     delete:
+      operationId: disableWebAuthn
       summary: Disable WebAuthn / remove passkeys
       description: >
         Removes either one credential (by `credentialId`) or all credentials
         (`disableAll: true`) for the authenticated user. Exactly one of the two
         must be provided.
+
+
+        Access: authenticated (bearer token or `access_token` cookie).
       tags: [WebAuthn]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
       requestBody:
         required: true
         content:
@@ -386,12 +523,28 @@ paths:
           description: Unauthorized
         "404":
           description: Credential not found
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/webauthn-login-options:
     post:
+      operationId: webAuthnLoginOptions
       summary: Get WebAuthn login options
-      description: Returns PublicKeyCredentialRequestOptions to begin passkey login. Not authenticated.
+      description: >-
+        Returns PublicKeyCredentialRequestOptions to begin passkey login. Not authenticated.
+
+
+        Access: public — no authentication.
       tags: [WebAuthn]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      security: []
       requestBody:
         required: true
         content:
@@ -428,14 +581,29 @@ paths:
                         properties:
                           success: { type: boolean, example: false }
                           message: { type: string }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
 
   /api/v1/webauthn-verify-login:
     post:
+      operationId: webAuthnVerifyLogin
       summary: Verify WebAuthn login assertion
       description: >
         Verifies the authentication response and issues a short-lived tempToken.
         Not authenticated (this is the login step itself).
+
+
+        Access: public — no authentication.
       tags: [WebAuthn]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      security: []
       requestBody:
         required: true
         content:
@@ -476,15 +644,30 @@ paths:
                         properties:
                           success: { type: boolean, example: false }
                           message: { type: string }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
 
   /api/v1/webauthn-login:
     post:
+      operationId: webAuthnLogin
       summary: WebAuthn login (final step)
       description: >
         Exchanges a verified tempToken (from webauthn-verify-login) for the
         user's real accessToken and profile. Not authenticated via bearerAuth
         — the tempToken itself is the credential.
+
+
+        Access: public — no authentication.
       tags: [WebAuthn]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      security: []
       requestBody:
         required: true
         content:
@@ -513,18 +696,33 @@ paths:
                         description: Full profile object (same shape as GET /profile data.user, minus tenant fields).
         "401":
           description: Missing, invalid, or expired tempToken
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/auth/google-calendar/connect:
     get:
+      operationId: googleCalendarConnect
       summary: Get Google Calendar connect URL
       description: >
         Returns a Google OAuth consent URL (separate from the login OAuth flow)
         for connecting the authenticated user's Google Calendar, used for
         interview scheduling. The frontend opens this URL in a popup rather
         than following a redirect.
+
+
+        Access: authenticated (bearer token or `access_token` cookie).
       tags: [Google Calendar]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Authorize URL returned
@@ -544,17 +742,28 @@ paths:
                         }
         "401":
           description: Unauthorized
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/auth/google-calendar/status:
     get:
+      operationId: googleCalendarStatus
       summary: Get Google Calendar connection status
       description: >
         Polled by the frontend after the connect popup closes, to learn whether
         the connect flow actually succeeded (window.opener messaging from the
         popup is unreliable due to Google's Cross-Origin-Opener-Policy header).
+
+
+        Access: authenticated (bearer token or `access_token` cookie).
       tags: [Google Calendar]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Connection status
@@ -570,9 +779,16 @@ paths:
                       connected: { type: boolean, example: true }
         "401":
           description: Unauthorized
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/auth/google/callback:
     get:
+      operationId: googleAuthCallback
       summary: Google OAuth login callback
       description: >
         Callback URL that Google redirects to after login authentication. Lives
@@ -582,7 +798,11 @@ paths:
         cookie (web) or appends tokens to the mobile deep link, then redirects
         the browser; on failure it redirects to the login page (web) or the
         mobile deep link with an `error` query param.
+
+
+        Access: public — no authentication.
       tags: [Authentication]
+      security: []
       parameters:
         - name: code
           in: query
@@ -603,9 +823,12 @@ paths:
             optionally with tenant_setup/tenant_picker/tenants params) or to the
             login page with an error, or — for mobile — to the hrms://
             (or exp://) deep link with the same query params.
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
   /api/auth/google-calendar/callback:
     get:
+      operationId: googleCalendarCallback
       summary: Google Calendar OAuth callback
       description: >
         Callback URL that Google redirects the connect popup to. Lives OUTSIDE
@@ -615,7 +838,11 @@ paths:
         identity is carried in a short-lived signed `state` JWT instead. Does
         not return JSON; it responds with a small HTML page that best-effort
         posts a message to `window.opener` and shows a manual close button.
+
+
+        Access: public — no authentication.
       tags: [Google Calendar]
+      security: []
       parameters:
         - name: code
           in: query
@@ -634,3 +861,5 @@ paths:
             text/html:
               schema:
                 type: string
+        "429":
+          $ref: "#/components/responses/TooManyRequests"

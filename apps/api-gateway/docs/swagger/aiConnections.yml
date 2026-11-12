@@ -1,6 +1,7 @@
 paths:
   /api/v1/ai-connections/requests/{requestId}:
     get:
+      operationId: getConnectionRequest
       summary: Show a pending AI assistant connection request
       description: >
         Called by the web app's consent screen (/connect/authorize/:requestId)
@@ -9,9 +10,13 @@ paths:
         and the requested scopes. Requests expire after 10 minutes. The MCP
         endpoints themselves (/mcp, /oauth/*, /.well-known/*) live outside
         /api/v1 and are described in docs/mcp.md.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [AI Assistants]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - in: path
           name: requestId
@@ -20,23 +25,40 @@ paths:
       responses:
         "200": { description: Request details }
         "401": { description: Not signed in }
-        "404": { description: Expired, already answered, or unknown }
+        "404": { description: "Expired, already answered, or unknown" }
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
   /api/v1/ai-connections/requests/{requestId}/approve:
     post:
+      operationId: approveConnectionRequest
       summary: Approve an AI assistant connection
       description: >
         Issues a single-use authorization code bound to the signed-in user and
         their current organisation (never values from the request body), for
         a subset of the requested scopes, and returns the client redirect URL
         carrying it. CSRF-protected.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [AI Assistants]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - in: path
           name: requestId
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -61,47 +83,113 @@ paths:
       responses:
         "200": { description: "`data.redirectTo` — send the browser there" }
         "400": { description: No or unknown scopes }
-        "404": { description: Expired, already answered, or unknown }
+        "404": { description: "Expired, already answered, or unknown" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
   /api/v1/ai-connections/requests/{requestId}/deny:
     post:
+      operationId: denyConnectionRequest
       summary: Decline an AI assistant connection
+      description: >-
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [AI Assistants]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - in: path
           name: requestId
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200": { description: "`data.redirectTo` carries error=access_denied" }
-        "404": { description: Expired, already answered, or unknown }
+        "404": { description: "Expired, already answered, or unknown" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
   /api/v1/ai-connections:
     get:
+      operationId: listConnections
       summary: List your connected AI assistants
       description: >
         The caller's own active connections in their current organisation,
         plus `mcpUrl`, the address to give an assistant.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [AI Assistants]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200": { description: "`data.connections` and `data.mcpUrl`" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
   /api/v1/ai-connections/{grantId}:
     delete:
+      operationId: revokeConnection
       summary: Disconnect one of your AI assistants
       description: >
         Revokes the connection immediately: its access tokens are refused on
         the next call and its refresh token stops working. Someone else's
         connection id returns 404.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [AI Assistants]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - in: path
           name: grantId
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200": { description: Disconnected }
         "404": { description: Not one of your connections }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"

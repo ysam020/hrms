@@ -1,6 +1,7 @@
 paths:
   /api/v1/ai-insights:
     post:
+      operationId: generateInsights
       summary: Generate an AI analytics report
       description: >
         Fetches aggregated data for one HRMS module, then streams an AI-generated
@@ -32,9 +33,16 @@ paths:
 
         Requires role owner, admin, or hr. Rate-limited to 20 requests/minute per client
         (Redis-backed) since each call invokes the LLM.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); tenant role owner, admin, hr only (authorize).
       tags: [AI Insights]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -111,3 +119,5 @@ paths:
           description: >
             Data-fetch failure before the stream started (e.g. Prisma error, or missing
             tenant context for the employee-kyc module)
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"

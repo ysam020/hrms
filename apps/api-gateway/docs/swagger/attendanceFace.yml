@@ -1,0 +1,129 @@
+# Face verification for attendance (src/routes/attendance.ts, handlers/attendance.ts,
+# services/faceAttestation.ts). Business mount. The flow is:
+#   1. POST /attendance/face/challenge   -> challengeId (valid 120 s)
+#   2. POST /attendance/face/verify      -> single-use attestation (valid 120 s)
+#   3. POST /add-attendance with faceAttestation
+# Step 3 only requires the attestation when ATTENDANCE_FACE_ATTESTATION=enforce.
+paths:
+  /api/v1/attendance/face/challenge:
+    post:
+      operationId: createFaceChallenge
+      summary: Start a face verification
+      description: >-
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
+      tags: [Attendance]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Challenge issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Face challenge issued" }
+                  data:
+                    type: object
+                    properties:
+                      challengeId: { type: string }
+                      expiresInSeconds: { type: integer, example: 120 }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/attendance/face/verify:
+    post:
+      operationId: verifyFace
+      summary: Verify a face descriptor against the enrolled template
+      description: >-
+        Compares the descriptor computed on the device with the caller's
+        enrolled template (POST /save-face-descriptor). Success returns a
+        single-use attestation for POST /add-attendance. 10 failures within
+        15 minutes lock verification (TOO_MANY_ATTEMPTS).
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
+      tags: [Attendance]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [challengeId, descriptor]
+              properties:
+                challengeId: { type: string, minLength: 1, maxLength: 128 }
+                descriptor:
+                  type: array
+                  description: Face embedding computed on the device.
+                  items: { type: number }
+            example:
+              {
+                challengeId: "c1a2b3...",
+                descriptor: [0.0123, -0.0456, 0.0789],
+              }
+      responses:
+        "200":
+          description: Face verified
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Face verified" }
+                  data:
+                    type: object
+                    properties:
+                      attestation:
+                        {
+                          type: string,
+                          description: Pass as faceAttestation to POST /add-attendance within 120 s.,
+                        }
+        "400":
+          description: >-
+            code CHALLENGE_INVALID ("This verification has expired."),
+            NOT_ENROLLED ("Face enrolment is required…") or INVALID_DESCRIPTOR
+            ("Face data could not be read."), or a validation error.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          description: code NO_MATCH — face verification failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "429":
+          description: code TOO_MANY_ATTEMPTS
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"

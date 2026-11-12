@@ -1,0 +1,333 @@
+# Resumable (S3 multipart) uploads (src/routes/general.ts, handlers/resumableUpload.ts).
+# Business mount. Same validation and key layout as POST /upload/presigned-url;
+# sessions live in Redis for 24 h under the caller's tenant + user, so only the
+# person who started an upload can continue, complete or abort it. Nothing is
+# reachable as a file until /complete has verified every part.
+components:
+  schemas:
+    UploadedPart:
+      type: object
+      properties:
+        partNumber: { type: integer, example: 1 }
+        size: { type: integer, example: 5242880 }
+  responses:
+    UploadSessionNotFound:
+      description: Upload session expired or not the caller's
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            {
+              success: false,
+              message: "This upload has expired or doesn't exist. Start it again.",
+            }
+
+paths:
+  /api/v1/upload/multipart/start:
+    post:
+      operationId: startMultipartUpload
+      summary: Start a resumable upload
+      description: >-
+        Files up to 15 MB, split into 5 MB parts. Allowed types are the same
+        images/documents as /upload/presigned-url; executable/script
+        extensions are refused. The S3 key is
+        folder/[formikField/]username/<name>_<timestamp>_<random><ext>.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
+      tags: [General]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fileName, fileType, size, folder, username]
+              properties:
+                fileName: { type: string, example: "offer-letter.pdf" }
+                fileType: { type: string, example: "application/pdf" }
+                size: { type: integer, minimum: 1, maximum: 15728640 }
+                folder: { type: string, example: "documents" }
+                username: { type: string, example: "asha.rao" }
+                formikField: { type: string, description: Optional sub-folder. }
+      responses:
+        "200":
+          description: Upload started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Upload started" }
+                  data:
+                    type: object
+                    properties:
+                      uploadId: { type: string }
+                      partSize: { type: integer, example: 5242880 }
+                      partCount: { type: integer, example: 2 }
+                      expiresAt:
+                        {
+                          type: integer,
+                          description: "Session expiry, epoch ms.",
+                        }
+        "400":
+          description: Missing fields, size out of range, dangerous or disallowed file type, or invalid path components
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/upload/multipart/part-url:
+    post:
+      operationId: getPartUploadUrl
+      summary: Get a presigned URL for one part
+      description: >-
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
+      tags: [General]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [uploadId, partNumber]
+              properties:
+                uploadId: { type: string }
+                partNumber:
+                  { type: integer, minimum: 1, description: 1..partCount }
+      responses:
+        "200":
+          description: Part URL generated (PUT the part's bytes to it within 15 minutes)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Part URL generated" }
+                  data:
+                    type: object
+                    properties:
+                      url: { type: string, format: uri }
+                      partNumber: { type: integer }
+        "400":
+          description: Invalid part number
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          $ref: "#/components/responses/UploadSessionNotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/upload/multipart/{uploadId}/parts:
+    get:
+      operationId: listUploadedParts
+      summary: List the parts S3 has confirmed
+      description: >-
+        The source of truth a client resumes from.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
+      tags: [General]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: uploadId
+          in: path
+          required: true
+          schema: { type: string, maxLength: 1024 }
+      responses:
+        "200":
+          description: Uploaded parts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Uploaded parts" }
+                  data:
+                    type: object
+                    properties:
+                      parts:
+                        {
+                          type: array,
+                          items: { $ref: "#/components/schemas/UploadedPart" },
+                        }
+                      partCount: { type: integer }
+                      partSize: { type: integer }
+                      size: { type: integer }
+        "404":
+          $ref: "#/components/responses/UploadSessionNotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/upload/multipart/complete:
+    post:
+      operationId: completeMultipartUpload
+      summary: Verify and complete a resumable upload
+      description: >-
+        Every part must be present once, in order, adding up to the declared size.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
+      tags: [General]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [uploadId]
+              properties:
+                uploadId: { type: string }
+      responses:
+        "200":
+          description: Upload complete
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Upload complete" }
+                  data:
+                    type: object
+                    properties:
+                      key:
+                        {
+                          type: string,
+                          example: "documents/asha.rao/offer-letter_1762934400000_a1b2c3d4.pdf",
+                        }
+                      fileUrl: { type: string, format: uri }
+        "404":
+          $ref: "#/components/responses/UploadSessionNotFound"
+        "409":
+          description: Parts missing or sizes don't add up; the confirmed parts are returned so the client can resume
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: false }
+                  message:
+                    {
+                      type: string,
+                      example: "Upload is incomplete. Resume it to send the missing parts.",
+                    }
+                  data:
+                    type: object
+                    properties:
+                      parts:
+                        {
+                          type: array,
+                          items: { $ref: "#/components/schemas/UploadedPart" },
+                        }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/upload/multipart/abort:
+    post:
+      operationId: abortMultipartUpload
+      summary: Discard a resumable upload
+      description: >-
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
+      tags: [General]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [uploadId]
+              properties:
+                uploadId: { type: string }
+      responses:
+        "200":
+          description: Upload discarded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessMessage" }
+              example: { success: true, message: "Upload discarded" }
+        "404":
+          $ref: "#/components/responses/UploadSessionNotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"

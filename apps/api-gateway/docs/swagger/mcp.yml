@@ -1,0 +1,487 @@
+# MCP server + OAuth 2.1 authorisation server for external AI assistants
+# (src/mcp/router.ts, mcp/oauth.ts, mcp/config.ts). Mounted at the app root,
+# BEFORE the web app's CORS policy, cookie parser and CSRF middleware: these
+# endpoints use bearer tokens / PKCE, never cookies, and send their own open
+# CORS policy (OPTIONS preflight is answered on every path here).
+# Errors follow RFC 6749 ({ error, error_description }) on /oauth/* and
+# JSON-RPC ({ jsonrpc, error: { code, message }, id }) on /mcp*.
+components:
+  securitySchemes:
+    mcpOAuth:
+      type: oauth2
+      description: >-
+        Access tokens issued by this server's own OAuth flow (public clients,
+        PKCE S256 required, dynamic client registration). Not the same token
+        as the web app's access JWT.
+      flows:
+        authorizationCode:
+          authorizationUrl: /oauth/authorize
+          tokenUrl: /oauth/token
+          refreshUrl: /oauth/token
+          scopes:
+            "profile:read": "Your profile: name, contact details, department and designation"
+            "leave:read": "Your leave balance and leave applications"
+            "attendance:read": "Your attendance and work-from-home requests"
+            "payroll:read": "Your salary structure and deductions"
+            "org:read": "Your organisation's HR policies, announcements and holidays"
+            "calendar:read": "Your calendar events"
+            "approvals:read": "Requests waiting for your approval"
+            "helpdesk:read": "Your helpdesk tickets (every ticket, if you manage the helpdesk)"
+            "messages:read": "Your unread chat messages, including who sent them"
+            "recruitment:read": "Recruitment pipelines, if you have access to recruitment"
+            "reports:read": "Saved reports, if you have access to reports"
+  schemas:
+    OAuthProtectedResourceMetadata:
+      type: object
+      properties:
+        resource: { type: string, format: uri }
+        authorization_servers:
+          { type: array, items: { type: string, format: uri } }
+        scopes_supported: { type: array, items: { type: string } }
+        bearer_methods_supported:
+          { type: array, items: { type: string }, example: [header] }
+        resource_name: { type: string, example: "Praesto HRMS" }
+    OAuthError:
+      type: object
+      properties:
+        error: { type: string, example: "invalid_grant" }
+        error_description: { type: string }
+    JsonRpcError:
+      type: object
+      properties:
+        jsonrpc: { type: string, example: "2.0" }
+        error:
+          type: object
+          properties:
+            code: { type: integer, example: -32001 }
+            message: { type: string }
+        id: { nullable: true, example: null }
+    JsonRpcRequest:
+      type: object
+      description: An MCP (Model Context Protocol) JSON-RPC 2.0 message, Streamable HTTP transport, JSON responses.
+      required: [jsonrpc, method]
+      properties:
+        jsonrpc: { type: string, enum: ["2.0"] }
+        id: { oneOf: [{ type: string }, { type: integer }] }
+        method: { type: string, example: "tools/list" }
+        params: { type: object }
+  responses:
+    McpMethodNotAllowed:
+      description: Only POST is supported (Allow header = POST)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/JsonRpcError" }
+          example:
+            {
+              jsonrpc: "2.0",
+              error: { code: -32000, message: "Method not allowed." },
+              id: null,
+            }
+
+paths:
+  /.well-known/oauth-authorization-server:
+    get:
+      operationId: oauthAuthorizationServerMetadata
+      summary: OAuth authorisation server metadata (RFC 8414)
+      tags: [MCP & OAuth]
+      security: []
+      responses:
+        "200":
+          description: Metadata (Cache-Control public, max-age=3600)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  issuer: { type: string, format: uri }
+                  authorization_endpoint: { type: string, format: uri }
+                  token_endpoint: { type: string, format: uri }
+                  registration_endpoint: { type: string, format: uri }
+                  revocation_endpoint: { type: string, format: uri }
+                  response_types_supported:
+                    { type: array, items: { type: string }, example: [code] }
+                  grant_types_supported:
+                    {
+                      type: array,
+                      items: { type: string },
+                      example: [authorization_code, refresh_token],
+                    }
+                  code_challenge_methods_supported:
+                    { type: array, items: { type: string }, example: [S256] }
+                  token_endpoint_auth_methods_supported:
+                    { type: array, items: { type: string }, example: [none] }
+                  revocation_endpoint_auth_methods_supported:
+                    { type: array, items: { type: string }, example: [none] }
+                  scopes_supported: { type: array, items: { type: string } }
+
+  /.well-known/oauth-protected-resource:
+    get:
+      operationId: oauthProtectedResourceMetadata
+      summary: Protected resource metadata (RFC 9728)
+      description: Also served at /.well-known/oauth-protected-resource/mcp, which is the URL advertised in WWW-Authenticate.
+      tags: [MCP & OAuth]
+      security: []
+      responses:
+        "200":
+          description: Metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthProtectedResourceMetadata"
+
+  /.well-known/oauth-protected-resource/mcp:
+    get:
+      operationId: oauthProtectedResourceMetadataMcp
+      summary: Protected resource metadata for /mcp (RFC 9728)
+      tags: [MCP & OAuth]
+      security: []
+      responses:
+        "200":
+          description: Metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthProtectedResourceMetadata"
+
+  /oauth/register:
+    post:
+      operationId: oauthRegisterClient
+      summary: Dynamic client registration (RFC 7591)
+      description: >-
+        Every client is registered as a public client
+        (token_endpoint_auth_method none). Redirect URIs must be https, http
+        on localhost/127.0.0.1/[::1], or a reverse-domain private-use scheme;
+        no fragments; 1-5 URIs. Accepts JSON or form-encoded bodies (16 KB).
+      tags: [MCP & OAuth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [redirect_uris]
+              properties:
+                redirect_uris:
+                  type: array
+                  minItems: 1
+                  maxItems: 5
+                  items: { type: string, maxLength: 2048 }
+                grant_types:
+                  type: array
+                  description: Must include authorization_code; only authorization_code and refresh_token are allowed.
+                  items:
+                    { type: string, enum: [authorization_code, refresh_token] }
+                client_name: { type: string, maxLength: 100 }
+                client_uri: { type: string, description: Kept only if https. }
+            example:
+              redirect_uris: ["https://assistant.example.com/oauth/callback"]
+              client_name: "Example Assistant"
+      responses:
+        "201":
+          description: Registered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  client_id: { type: string, example: "mcp_AbCdEfGhIjKlMnOpQr" }
+                  client_id_issued_at: { type: integer }
+                  client_name: { type: string }
+                  client_uri: { type: string }
+                  redirect_uris: { type: array, items: { type: string } }
+                  grant_types: { type: array, items: { type: string } }
+                  response_types: { type: array, items: { type: string } }
+                  token_endpoint_auth_method: { type: string, example: none }
+        "400":
+          description: invalid_redirect_uri or invalid_client_metadata
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OAuthError" }
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          description: server_error
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OAuthError" }
+
+  /oauth/authorize:
+    get:
+      operationId: oauthAuthorize
+      summary: Start an authorisation (browser redirect)
+      description: >-
+        Validates the request and redirects (302) to the web app's consent
+        page, where the signed-in person approves scopes. Errors after the
+        client and redirect URI are known are returned to the redirect URI
+        as error/error_description/state/iss query parameters; an unknown
+        client or unregistered redirect URI gets a 400 plain-text page.
+      tags: [MCP & OAuth]
+      security: []
+      parameters:
+        - {
+            name: response_type,
+            in: query,
+            required: true,
+            schema: { type: string, enum: [code] },
+          }
+        - {
+            name: client_id,
+            in: query,
+            required: true,
+            schema: { type: string },
+          }
+        - {
+            name: redirect_uri,
+            in: query,
+            required: true,
+            schema: { type: string },
+          }
+        - {
+            name: code_challenge,
+            in: query,
+            required: true,
+            schema: { type: string },
+          }
+        - {
+            name: code_challenge_method,
+            in: query,
+            required: true,
+            schema: { type: string, enum: [S256] },
+          }
+        - {
+            name: scope,
+            in: query,
+            required: false,
+            description: Space-separated scopes.,
+            schema: { type: string },
+          }
+        - {
+            name: state,
+            in: query,
+            required: false,
+            schema: { type: string, maxLength: 1024 },
+          }
+        - {
+            name: resource,
+            in: query,
+            required: false,
+            description: Must be this server's MCP resource URL if given.,
+            schema: { type: string },
+          }
+      responses:
+        "302":
+          description: Redirect to the consent page, or back to redirect_uri with an error
+          headers:
+            Location: { schema: { type: string } }
+        "400":
+          description: Unknown client or unregistered redirect URI (text/plain)
+          content:
+            text/plain:
+              schema: { type: string }
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /oauth/token:
+    post:
+      operationId: oauthToken
+      summary: Exchange a code or refresh token for tokens
+      description: Responses carry Cache-Control no-store. Accepts JSON or form-encoded bodies.
+      tags: [MCP & OAuth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [grant_type, client_id]
+              properties:
+                grant_type:
+                  { type: string, enum: [authorization_code, refresh_token] }
+                client_id: { type: string }
+                code: { type: string, description: authorization_code grant. }
+                code_verifier:
+                  {
+                    type: string,
+                    description: authorization_code grant (PKCE).,
+                  }
+                redirect_uri:
+                  { type: string, description: authorization_code grant. }
+                resource: { type: string }
+                refresh_token:
+                  { type: string, description: refresh_token grant. }
+          application/json:
+            schema:
+              type: object
+              required: [grant_type, client_id]
+              properties:
+                grant_type:
+                  { type: string, enum: [authorization_code, refresh_token] }
+                client_id: { type: string }
+                code: { type: string }
+                code_verifier: { type: string }
+                redirect_uri: { type: string }
+                resource: { type: string }
+                refresh_token: { type: string }
+      responses:
+        "200":
+          description: Tokens
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token: { type: string }
+                  token_type: { type: string, enum: [Bearer] }
+                  expires_in: { type: integer }
+                  refresh_token: { type: string }
+                  scope: { type: string, example: "profile:read leave:read" }
+        "400":
+          description: invalid_request, invalid_grant, unsupported_grant_type, invalid_target, …
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OAuthError" }
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          description: server_error
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OAuthError" }
+
+  /oauth/revoke:
+    post:
+      operationId: oauthRevoke
+      summary: Revoke a token (RFC 7009)
+      description: Accepts an access or refresh token and ends the grant behind it if it belongs to client_id. Always 200 with an empty body.
+      tags: [MCP & OAuth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [token, client_id]
+              properties:
+                token: { type: string }
+                client_id: { type: string }
+          application/json:
+            schema:
+              type: object
+              required: [token, client_id]
+              properties:
+                token: { type: string }
+                client_id: { type: string }
+      responses:
+        "200":
+          description: Done (also returned for unknown tokens)
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /mcp/public:
+    post:
+      operationId: mcpPublic
+      summary: Anonymous MCP endpoint
+      description: >-
+        MCP over Streamable HTTP without sign-in; only the public tools are
+        listed. Body up to 256 KB. Any other method gets 405.
+      tags: [MCP & OAuth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JsonRpcRequest" }
+            example: { jsonrpc: "2.0", id: 1, method: "tools/list" }
+      responses:
+        "200":
+          description: JSON-RPC response
+          content:
+            application/json:
+              schema: { type: object }
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          description: JSON-RPC internal error (-32603)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JsonRpcError" }
+    get:
+      operationId: mcpPublicGetNotAllowed
+      summary: Not supported (405)
+      tags: [MCP & OAuth]
+      security: []
+      responses:
+        "405": { $ref: "#/components/responses/McpMethodNotAllowed" }
+    delete:
+      operationId: mcpPublicDeleteNotAllowed
+      summary: Not supported (405)
+      tags: [MCP & OAuth]
+      security: []
+      responses:
+        "405": { $ref: "#/components/responses/McpMethodNotAllowed" }
+
+  /mcp:
+    post:
+      operationId: mcpAuthenticated
+      summary: Authenticated MCP endpoint
+      description: >-
+        MCP over Streamable HTTP. Requires an access token from /oauth/token;
+        the tools offered depend on the granted scopes and the person's own
+        permissions. Rate limited per IP and per grant. Any other method gets
+        405 (after authentication).
+      tags: [MCP & OAuth]
+      security:
+        - mcpOAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JsonRpcRequest" }
+      responses:
+        "200":
+          description: JSON-RPC response
+          content:
+            application/json:
+              schema: { type: object }
+        "401":
+          description: Missing or invalid token; WWW-Authenticate points to the protected-resource metadata
+          headers:
+            WWW-Authenticate: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JsonRpcError" }
+        "403":
+          description: access_denied — the person or organisation may no longer use the grant
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JsonRpcError" }
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          description: JSON-RPC internal error (-32603)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JsonRpcError" }
+    get:
+      operationId: mcpGetNotAllowed
+      summary: Not supported (405)
+      tags: [MCP & OAuth]
+      security:
+        - mcpOAuth: []
+      responses:
+        "401":
+          description: Missing or invalid token
+        "405": { $ref: "#/components/responses/McpMethodNotAllowed" }
+    delete:
+      operationId: mcpDeleteNotAllowed
+      summary: Not supported (405)
+      tags: [MCP & OAuth]
+      security:
+        - mcpOAuth: []
+      responses:
+        "401":
+          description: Missing or invalid token
+        "405": { $ref: "#/components/responses/McpMethodNotAllowed" }

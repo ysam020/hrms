@@ -1,14 +1,19 @@
 paths:
   /api/v1/get-holidays/{year}:
     get:
+      operationId: getHolidays
       summary: Get holidays for a year
       description: >-
         Returns the flattened list of company holidays for the given year,
         read out of the per year/month Holiday records. Cached per
         tenant/year.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [General]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: year
           in: path
@@ -45,18 +50,36 @@ paths:
           description: Invalid year
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/add-holiday:
     post:
+      operationId: addHoliday
       summary: Add a holiday
       description: >-
         Adds a holiday to the company calendar for the year/month derived
         from `date`. Any authenticated user may call this — there is no role
         restriction. Rejects duplicate dates within the same year/month.
         Invalidates the cached holiday list for that year.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [General]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -82,18 +105,36 @@ paths:
           description: Missing/invalid name or date, or a holiday already exists on that date
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/delete-holiday:
     put:
+      operationId: deleteHoliday
       summary: Delete a holiday
       description: >-
         Removes a single holiday identified by its exact `date` (not an id —
         the year/month bucket is derived from the date to locate the
         record). Any authenticated user may call this. Invalidates the
         cached holiday list for that year.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [General]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -120,9 +161,20 @@ paths:
           description: Unauthorized
         "404":
           description: No holiday record for that month, or no holiday on that date
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/bulk-delete-holidays:
     put:
+      operationId: bulkDeleteHolidays
       summary: Bulk delete holidays
       description: >-
         Deletes multiple holidays at once, identified by exact dates. Dates
@@ -130,9 +182,16 @@ paths:
         match an existing holiday are reported back in `notFound`. Any
         authenticated user may call this. Invalidates the cached holiday
         list for every year touched.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [General]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -165,18 +224,35 @@ paths:
                         items: { type: string, format: date }
         "401":
           description: Unauthorized
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-calendar-events:
     get:
+      operationId: getCalendarEvents
       summary: Get calendar events
       description: >-
         Returns all personal calendar events for the authenticated user only
         (events are stored on the user's own record, not shared/global),
         sorted by date ascending. No filter query params are supported.
         Cached per tenant/user.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [General]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Calendar events retrieved
@@ -206,9 +282,20 @@ paths:
           description: Unauthorized
         "404":
           description: User not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/add-event:
     post:
+      operationId: addEvent
       summary: Add a calendar event
       description: >-
         Creates a new personal calendar event on the authenticated user's own
@@ -216,9 +303,16 @@ paths:
         description to 1000. Not validated by a Zod schema — missing fields
         are silently stored as empty strings. Invalidates the cached events
         list for the user.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [General]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -259,22 +353,39 @@ paths:
           description: Unauthorized
         "404":
           description: User not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/edit-calendar-event/{_id}:
     put:
+      operationId: editCalendarEvent
       summary: Edit a calendar event
       description: >-
         Updates fields of an existing event on the authenticated user's own
         record (only fields explicitly present in the body are changed).
         Invalidates the cached events list for the user.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [General]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: _id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -302,21 +413,38 @@ paths:
           description: Unauthorized
         "404":
           description: User or event not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/delete-calendar-event/{_id}:
     delete:
+      operationId: deleteCalendarEvent
       summary: Delete a calendar event
       description: >-
         Removes an event from the authenticated user's own record.
         Invalidates the cached events list for the user.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [General]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: _id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Event deleted
@@ -332,18 +460,33 @@ paths:
           description: Unauthorized
         "404":
           description: User or event not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/birthdays-anniversaries:
     get:
+      operationId: getBirthdaysAnniversaries
       summary: Get birthdays and work anniversaries
       description: >-
         Returns a flat, day-sorted list mixing both birthdays and work
         anniversaries falling in the given month/year, across all
         non-terminated employees. `month` and `year` query params are
         required. Cached per tenant/month/year.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [General]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: month
           in: query
@@ -389,9 +532,20 @@ paths:
           description: month or year query params missing/invalid
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/audit-logs:
     get:
+      operationId: getAuditLogs
       summary: Get audit logs
       description: >-
         Returns recent audit log entries. Requires privileged access (tenant
@@ -399,9 +553,13 @@ paths:
         is omitted, capped at NOTIFICATION_PRUNE_LIMIT rows. List rows carry
         no before/after snapshots; fetch them per row from
         `/api/v1/audit-logs/{id}`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner, admin or superuser only (requirePrivileged).
       tags: [General]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: days
           in: query
@@ -446,16 +604,29 @@ paths:
           description: Unauthorized
         "403":
           description: Forbidden — requires privileged (owner/admin/superuser) access
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/audit-logs/{id}:
     get:
+      operationId: getAuditLogDetail
       summary: Get one audit log entry with its snapshots
       description: >-
         Returns a single audit log entry including its redacted `oldValue` /
         `newValue` snapshots. Same access rule as the list.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner, admin or superuser only (requirePrivileged).
       tags: [General]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -472,9 +643,18 @@ paths:
           description: Forbidden — requires privileged (owner/admin/superuser) access
         "404":
           description: Not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/upload/presigned-url:
     post:
+      operationId: getPresignedUrl
       summary: Get S3 presigned upload URL
       description: >-
         Generates a pre-signed S3 PUT URL (5 minute expiry) for direct
@@ -482,9 +662,16 @@ paths:
         allow-list and rejects known-dangerous extensions (.exe, .sh, .ps1,
         etc). All path components are sanitized before being used as the S3
         key.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [General]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -536,9 +723,20 @@ paths:
           description: Missing required fields, dangerous extension, or disallowed file type
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/upload/view-url:
     post:
+      operationId: getFileViewUrl
       summary: Get a short-lived S3 view URL
       description: >-
         Returns a pre-signed GET URL (5 minute expiry) for viewing a
@@ -547,9 +745,16 @@ paths:
         sensitive). The caller must either own the file (username in the key
         matches their own) or hold a privileged role for the same tenant as
         the file's owner; path traversal (`..`) is rejected outright.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [General]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -585,3 +790,11 @@ paths:
           description: Unauthorized
         "403":
           description: Not the file's owner and not privileged for its tenant, or path outside employee_kyc/
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"

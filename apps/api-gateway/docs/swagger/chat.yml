@@ -1,6 +1,7 @@
 paths:
   /api/v1/chat/conversations:
     get:
+      operationId: getConversations
       summary: Get all conversations
       description: >
         Returns every chat conversation (direct rooms) the authenticated user
@@ -10,9 +11,13 @@ paths:
         for that room. Real-time delivery of new messages happens over
         WebSocket; this endpoint is for loading conversation list state
         (e.g. on page load or reconnect).
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Chat]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Conversations retrieved
@@ -60,9 +65,20 @@ paths:
                         unreadCount: { type: integer, example: 3 }
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/chat/conversations/start:
     post:
+      operationId: startConversation
       summary: Start (or resume) a direct conversation
       description: >
         Creates a new 1:1 direct chat room with `recipientUserId`, or returns
@@ -70,9 +86,16 @@ paths:
         the caller had previously deleted that room (soft "delete for me"),
         it is un-deleted for them. Group conversations are not supported —
         this always creates/returns a two-participant "direct" room.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Chat]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -121,9 +144,20 @@ paths:
           description: recipientUserId missing, invalid, or equal to the caller's own user ID
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/chat/conversations/{roomId}/messages:
     get:
+      operationId: getMessages
       summary: Get message history for a conversation
       description: >
         Returns a page of message history for a chat room, oldest-to-newest
@@ -135,9 +169,13 @@ paths:
         render — can show reply context. Caller must be a participant of the
         room. New messages arriving after the initial load are delivered over
         WebSocket, not this endpoint.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Chat]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: roomId
           in: path
@@ -200,9 +238,18 @@ paths:
           description: Caller is not a participant of this room
         "404":
           description: Conversation not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/chat/messages/{messageId}/view-url:
     get:
+      operationId: getMessageFileViewUrl
       summary: Get a pre-signed view URL for a message attachment
       description: >
         Generates a short-lived (15 minute) pre-signed S3 URL for viewing a
@@ -210,9 +257,13 @@ paths:
         permanent S3 URL but the bucket blocks all public/anonymous access,
         so a signed URL must be minted per view. Fails if the message has no
         file, is deleted, or the caller isn't a participant of its room.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Chat]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: messageId
           in: path
@@ -241,23 +292,38 @@ paths:
           description: Caller is not a participant of this message's room
         "404":
           description: Message not found, deleted, or has no file attachment
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/chat/conversations/{roomId}/read:
     post:
+      operationId: markMessagesRead
       summary: Mark messages as read
       description: >
         Marks all not-yet-read messages sent by other participants in this
         room as read by the caller (bulk update; adds the caller's user ID
         to each message's `readBy` array). Used to drive read-receipt state
         and unread badges.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Chat]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: roomId
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Messages marked as read
@@ -274,17 +340,30 @@ paths:
           description: Caller is not a participant of this room
         "404":
           description: Conversation not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/chat/unread-counts:
     get:
+      operationId: getUnreadCounts
       summary: Get unread message counts for all conversations
       description: >
         Returns unread message counts, keyed by room ID, for every
         conversation the caller participates in (and hasn't deleted). Used
         to populate unread badges without fetching full conversation list.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Chat]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Unread counts retrieved
@@ -305,23 +384,40 @@ paths:
                       }
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/chat/messages/{messageId}:
     delete:
+      operationId: deleteMessage
       summary: Delete a message
       description: >
         Soft-deletes a chat message: clears its content, marks it deleted,
         and unpins it if pinned. Any participant of the room may delete a
         message (not sender-only) — it is deleted for both/all sides; there
         is no "delete for me" variant at the message level.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Chat]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: messageId
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Message deleted
@@ -344,9 +440,18 @@ paths:
           description: Caller is not a participant of this message's room
         "404":
           description: Message not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/chat/conversations/{roomId}:
     delete:
+      operationId: deleteConversation
       summary: Delete a conversation (for the caller)
       description: >
         Soft-deletes the conversation for the caller only by adding their
@@ -354,14 +459,20 @@ paths:
         remain intact for other participants and are restored for the
         caller if they start a new direct conversation with the same
         recipient.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Chat]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: roomId
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Conversation deleted
@@ -376,23 +487,40 @@ paths:
           description: Unauthorized
         "404":
           description: Conversation not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/chat/messages/{messageId}/pin:
     post:
+      operationId: pinMessage
       summary: Pin a message
       description: >
         Pins a message within its chat room. A room may have at most 5
         pinned messages at once — pinning a 6th is rejected until one is
         unpinned. Deleted messages cannot be pinned. Pinning an
         already-pinned message is a no-op that returns the current message.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Chat]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: messageId
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Message pinned (or already pinned)
@@ -419,18 +547,34 @@ paths:
           description: Caller is not a participant of this message's room
         "404":
           description: Message not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
     delete:
+      operationId: unpinMessage
       summary: Unpin a message
-      description: Removes a message's pinned state, clearing `pinnedAt`/`pinnedBy`.
+      description: >-
+        Removes a message's pinned state, clearing `pinnedAt`/`pinnedBy`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Chat]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: messageId
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Message unpinned
@@ -453,16 +597,29 @@ paths:
           description: Caller is not a participant of this message's room
         "404":
           description: Message not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/chat/conversations/{roomId}/pinned:
     get:
+      operationId: getPinnedMessages
       summary: Get pinned messages for a conversation
       description: >
         Returns up to 5 pinned messages in the room, most-recently-pinned
         first.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Chat]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: roomId
           in: path
@@ -497,9 +654,18 @@ paths:
           description: Caller is not a participant of this room
         "404":
           description: Conversation not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/og-preview:
     get:
+      operationId: ogPreview
       summary: Fetch Open Graph preview for a URL
       description: >
         Fetches a target URL server-side and extracts Open Graph / Twitter
@@ -510,9 +676,13 @@ paths:
         redirects. On any fetch/parse failure this still returns HTTP 200
         with all metadata fields `null` rather than an error, so the client
         can render a plain link.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Chat]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: url
           in: query
@@ -541,3 +711,13 @@ paths:
           description: URL missing or fails SSRF/safety checks
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"

@@ -1,15 +1,20 @@
 paths:
   /api/v1/tenants/available:
     get:
+      operationId: listAvailableTenants
       summary: List available tenants
       description: >
         Returns every organisation the authenticated user holds a
         `TenantMembership` in (active tenants only). Requires only `authenticate`
         — no resolved tenant context needed, so `pendingSetup` users (no tenant
         yet) can call this too, e.g. to render the tenant picker.
+
+
+        Access: authenticated (bearer token or `access_token` cookie).
       tags: [Tenant]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Tenants the user belongs to
@@ -37,9 +42,16 @@ paths:
                             role: { type: string, example: "owner" }
         "401":
           description: Unauthorized
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/tenants:
     post:
+      operationId: createTenant
       summary: Create a new organisation
       description: >
         Creates a `Tenant`, provisions its dedicated database, seeds default
@@ -54,9 +66,15 @@ paths:
         best-effort cancelled. Idempotent: retrying with the same
         `razorpaySubscriptionId` after a tenant was already created for it
         re-issues tokens instead of erroring.
+
+
+        Access: authenticated (bearer token or `access_token` cookie).
       tags: [Tenant]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
       requestBody:
         required: true
         content:
@@ -133,9 +151,18 @@ paths:
             (`code: "DOMAIN_ALREADY_CLAIMED"`)
         "401":
           description: Unauthorized
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/tenants/complete-pending-setup:
     post:
+      operationId: completePendingSetup
       summary: Complete pending setup (server-side recovery)
       description: >
         Server-side recovery path for org creation — used when the client tab
@@ -144,9 +171,15 @@ paths:
         payment directly against the Razorpay API (`subscriptions.fetch`,
         status must be `authenticated` or `active`) rather than trusting a
         client-supplied signature. Otherwise identical to `POST /tenants`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie).
       tags: [Tenant]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
       requestBody:
         required: true
         content:
@@ -174,18 +207,38 @@ paths:
           description: Missing name, no pending payment found, or payment not completed
         "401":
           description: Unauthorized
+        "409":
+          description: "… already has a workspace for your email domain. Request to join that organisation instead."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/tenants/select:
     post:
+      operationId: selectTenant
       summary: Select/switch active tenant
       description: >
         Switches the authenticated user's active organisation context. Caller
         must hold a `TenantMembership` on the target tenant, which must be
         active. Issues a new JWT carrying the selected tenant's `tenantId`,
         `dbName`, and `tenantRole`, and sets the `refresh_token` cookie.
+
+
+        Access: authenticated (bearer token or `access_token` cookie).
       tags: [Tenant]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
       requestBody:
         required: true
         content:
@@ -222,18 +275,29 @@ paths:
           description: Not a member of the target tenant, or tenant is inactive
         "401":
           description: Unauthorized
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/tenants/domain-suggestion:
     get:
+      operationId: checkDomainSuggestion
       summary: Check for a domain-matched organisation
       description: >
         Checked by `pendingSetup` users on the org-setup page: is there an
         existing tenant whose claimed domain matches the caller's email
         domain, or does the caller already have a join request in flight?
         Public/free-mail domains never match. Requires only `authenticate`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie).
       tags: [Tenant]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Domain suggestion / existing request status
@@ -271,9 +335,16 @@ paths:
                         enum: [rejected, null]
         "401":
           description: Unauthorized
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/tenants/join-requests:
     post:
+      operationId: createJoinRequest
       summary: Request to join a domain-matched organisation
       description: >
         Creates (or resets, if previously rejected) a `TenantJoinRequest` for
@@ -282,9 +353,15 @@ paths:
         non-matching domains, inactive tenants, or if already a member.
         Notifies the target tenant's owners/admins and anyone holding
         `Organisation:approve_join_requests`. Requires only `authenticate`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie).
       tags: [Tenant]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
       requestBody:
         required: true
         content:
@@ -322,8 +399,15 @@ paths:
           description: Already a member of this organisation
         "401":
           description: Unauthorized
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
     get:
+      operationId: listJoinRequests
       summary: List join requests for the current tenant
       description: >
         Lists `TenantJoinRequest` rows for the caller's tenant, filtered by
@@ -331,9 +415,13 @@ paths:
         `requireActiveSubscription`, and the caller must be `owner`/`admin`,
         a superuser, or hold `Organisation:approve_join_requests`
         (`canApproveJoinRequests`, checked in-handler).
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Tenant]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - in: query
           name: status
@@ -367,9 +455,16 @@ paths:
           description: Subscription expired
         "403":
           description: No active tenant, or lacks permission to view join requests
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/tenants/join-requests/pending:
     get:
+      operationId: listPendingJoinRequestActions
       summary: List pending join requests for approval widgets
       description: >
         Feeds the sidebar badge / dashboard "Pending Approvals" widget —
@@ -378,9 +473,13 @@ paths:
         than 403 for callers without `canApproveJoinRequests`, since this is
         merged into a shared widget. Also aggregated into
         `GET /approvals/pending-all`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie).
       tags: [Tenant]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Pending join-request action items
@@ -407,9 +506,16 @@ paths:
                           }
         "401":
           description: Unauthorized
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/tenants/join-requests/{id}/approve:
     post:
+      operationId: approveJoinRequest
       summary: Approve a join request
       description: >
         Approves a pending `TenantJoinRequest`, creates the
@@ -421,14 +527,19 @@ paths:
         plan's seat limit (`code: "SEAT_LIMIT_REACHED"`). Requires
         `requireTenant` + `requireActiveSubscription` +
         `canApproveJoinRequests`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Tenant]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - in: path
           name: id
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
       requestBody:
         required: false
         content:
@@ -472,22 +583,34 @@ paths:
           description: Join request not found
         "409":
           description: Request already resolved
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/tenants/join-requests/{id}/reject:
     post:
+      operationId: rejectJoinRequest
       summary: Reject a join request
       description: >
         Rejects a pending `TenantJoinRequest` and records an optional reason.
         Requires `requireTenant` + `requireActiveSubscription` +
         `canApproveJoinRequests`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Tenant]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - in: path
           name: id
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
       requestBody:
         required: false
         content:
@@ -525,9 +648,16 @@ paths:
           description: Join request not found
         "409":
           description: Request already resolved
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/tenants/me:
     get:
+      operationId: getMyTenant
       summary: Get current tenant
       description: >
         Returns the full `Tenant` record for the caller's active tenant, plus
@@ -536,9 +666,13 @@ paths:
         Requires `requireTenant` but deliberately **not**
         `requireActiveSubscription` — the subscription page must be able to
         load even when the subscription has expired.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); no subscription check.
       tags: [Tenant]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Current tenant details
@@ -575,18 +709,31 @@ paths:
           description: No active tenant context (pendingSetup token)
         "404":
           description: Tenant not found
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/tenants/complete-org-setup:
     post:
+      operationId: completeOrgSetup
       summary: Complete org profile setup step
       description: >
         Marks the org-profile step of the onboarding wizard complete
         (`orgSetupComplete` on the refresh-token record) and issues a new JWT
         with `orgSetupComplete: true`. Requires `requireTenant` only — no
         subscription guard, since the caller is still mid-setup.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); no subscription check.
       tags: [Tenant]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
       responses:
         "200":
           description: Org setup marked complete, new JWT issued
@@ -604,17 +751,28 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/tenants/members:
     get:
+      operationId: listTenantMembers
       summary: List tenant members
       description: >
         Returns every `TenantMembership` for the current tenant joined with
         basic `User` fields. Requires `requireTenant` +
         `requireActiveSubscription`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Tenant]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Member list
@@ -645,17 +803,28 @@ paths:
           description: Subscription expired
         "403":
           description: No active tenant
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/tenants/org-profile:
     get:
+      operationId: getOrgProfile
       summary: Get org profile
       description: >
         Returns the organisation's letterhead/compliance profile fields. Any
         authenticated tenant member may read. Requires `requireTenant` +
         `requireActiveSubscription`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Tenant]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Org profile
@@ -689,17 +858,35 @@ paths:
           description: Subscription expired
         "403":
           description: No active tenant
+        "404":
+          description: "No active tenant."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
     put:
+      operationId: updateOrgProfile
       summary: Update org profile
       description: >
         Updates the organisation's letterhead/compliance profile fields
         (used on invoices/payslips). Restricted to superusers or callers
         holding the `Organisation:edit_company_info` permission — checked
         in-handler, on top of `requireTenant` + `requireActiveSubscription`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Tenant]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
       requestBody:
         required: true
         content:
@@ -742,3 +929,9 @@ paths:
           description: >
             No active tenant, or lacks Organisation:edit_company_info
             permission
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"

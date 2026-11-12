@@ -3,14 +3,20 @@ paths:
 
   /api/v1/public/careers/{slug}:
     get:
+      operationId: publicCareers
       summary: List published job openings on a tenant's public careers page
       description: >-
         Unauthenticated endpoint used by the public careers page. The tenant
         is resolved from the `slug` path param (resolvePublicTenant
-        middleware), not a JWT. Always returns only `Active` openings unless
-        an explicit `status` query param is supplied (up to 100 results,
-        page 1 only).
+        middleware), not a JWT. Always returns only `Active` openings that
+        are open to the public (not internal-only, deadline not passed); at
+        most 100, page 1 only. The former `status` override has been removed
+        from the handler and is ignored.
+
+
+        Access: public — no authentication; the organisation is resolved from the `slug` path parameter (resolvePublicTenant, 404 if unknown).
       tags: [Careers Page]
+      security: []
       parameters:
         - name: slug
           in: path
@@ -20,6 +26,8 @@ paths:
         - name: status
           in: query
           required: false
+          deprecated: true
+          description: Ignored — only Active openings are ever public.
           schema: { type: string }
           example: "Active"
       responses:
@@ -46,15 +54,24 @@ paths:
                         status: { type: string, example: "Active" }
         "404":
           description: Tenant not found for the given slug
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
 
   /api/v1/public/careers/{slug}/job/{id}:
     get:
+      operationId: publicJobOpening
       summary: Get a single published job opening
       description: >-
         Unauthenticated. Returns 404 if the job opening's status is anything
         other than `Active` (expired/deleted openings are never exposed on
         the public apply page, even via a stale/guessed link).
+
+
+        Access: public — no authentication; the organisation is resolved from the `slug` path parameter (resolvePublicTenant, 404 if unknown).
       tags: [Careers Page]
+      security: []
       parameters:
         - name: slug
           in: path
@@ -85,21 +102,31 @@ paths:
                       status: { type: string }
         "404":
           description: Job opening not found, or no longer accepting applications
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
 
   /api/v1/public/careers/{slug}/resume-upload-url:
     post:
+      operationId: getResumeUploadUrl
       summary: Get a pre-signed S3 URL to upload a candidate's resume
       description: >-
         Unauthenticated. Returns a short-lived (5 minute) pre-signed PUT URL
         for uploading a resume before submitting the application via
         apply-for-job. Only `application/pdf` is accepted; the returned
         `fileUrl` must be passed back as `resume` in the apply-for-job call.
+
+
+        Access: public — no authentication; the organisation is resolved from the `slug` path parameter (resolvePublicTenant, 404 if unknown).
       tags: [Careers Page]
       parameters:
         - name: slug
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+      security: []
       requestBody:
         required: true
         content:
@@ -133,42 +160,62 @@ paths:
                         description: Public S3 URL to send back as `resume`
         "400":
           description: fileName/fileType missing, or not a PDF
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
 
   /api/v1/apply-for-job/{slug}:
     post:
+      operationId: applyForJob
       summary: Submit a job application
       description: >-
-        Unauthenticated candidate application submission. `resume` must be a
-        URL previously obtained from resume-upload-url, scoped to this
-        tenant's own job_applications/ S3 prefix — any other value is
-        rejected as an invalid resume upload.
+        Unauthenticated candidate application submission (one-shot; the
+        careers page normally uses the draft flow under
+        /public/careers/{slug}/jobs/{jobId}/drafts). The opening must be
+        Active, not internal-only and before its deadline. The body is the
+        same application form as a draft (CareerApplicationData) plus the
+        opening id; unknown keys are dropped, and the opening's form
+        configuration decides which profile fields, résumé and cover letter
+        are required. `resume` must be a fileUrl issued by
+        resume-upload-url for this organisation. The email is recorded as
+        unverified. Only the new application's id is returned.
+
+
+        Access: public — no authentication; the organisation is resolved from the `slug` path parameter (resolvePublicTenant, 404 if unknown).
       tags: [Careers Page]
       parameters:
         - name: slug
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+      security: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [jobTitleId, name, email, mobile]
-              properties:
-                jobTitleId: { type: string }
-                jobTitle:
-                  type: string
-                  description: Fallback used as jobTitleId if jobTitleId is omitted
-                name: { type: string, example: "John Doe" }
-                email:
-                  { type: string, format: email, example: "john@example.com" }
-                mobile: { type: string, example: "+91 9876543210" }
-                aadharNo: { type: string }
-                resume:
-                  type: string
-                  format: uri
-                  description: fileUrl returned by resume-upload-url
+              allOf:
+                - type: object
+                  required: [jobTitleId]
+                  properties:
+                    jobTitleId: { type: string, description: Job opening id. }
+                    jobTitle:
+                      type: string
+                      description: Fallback used as jobTitleId if jobTitleId is omitted
+                - $ref: "#/components/schemas/CareerApplicationData"
+            example:
+              jobTitleId: "6650c2f1a9b3c4d5e6f70899"
+              name: "Arjun Mehta"
+              email: "arjun@example.com"
+              mobile: "+919876543210"
+              resume: "https://example-bucket.s3.ap-south-1.amazonaws.com/job_applications/acme/arjun-cv.pdf"
+              profile: { currentLocation: "Pune", totalExperience: 4 }
+              answers: {}
+              consent: true
       responses:
         "200":
           description: Application submitted
@@ -183,20 +230,43 @@ paths:
                       type: string,
                       example: "Application submitted successfully",
                     }
+                  data:
+                    type: object
+                    properties:
+                      id: { type: string }
         "400":
-          description: Invalid resume upload, or invalid application data
+          description: '"Some answers need attention." with per-field `errors`, or a downstream validation error'
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CareerFieldErrors" }
+        "404":
+          description: "This job opening is no longer accepting applications."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
 
   # ── Job openings (authenticated) ────────────────────────────────────────────
 
   /api/v1/view-job-openings:
     get:
+      operationId: viewJobOpenings
       summary: List job openings
       description: >-
         Returns job openings for the tenant, paginated, with optional status
         and search filters.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Recruitment]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: page
           in: query
@@ -216,14 +286,30 @@ paths:
           description: Job openings retrieved
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/view-job-opening/{id}:
     get:
+      operationId: viewJobOpening
       summary: Get a specific job opening
-      description: Returns details of a single job opening by id.
+      description: >-
+        Returns details of a single job opening by id.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Recruitment]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -236,46 +322,54 @@ paths:
           description: Unauthorized
         "404":
           description: Job opening not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/add-job-opening:
     post:
+      operationId: addJobOpening
       summary: Create a job opening
       description: >-
         Owner/superuser only. Creates a new job opening; `pipelineTemplateId`
         is snapshotted onto every application submitted against this opening
         so interview-pipeline stage validation stays fixed even if the
         template is edited later.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Recruitment]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                jobTitle: { type: string, example: "Backend Developer" }
-                jobDescription: { type: string }
-                requiredSkills: { type: string, example: "Node.js, MongoDB" }
-                experience: { type: string, example: "3" }
-                hiringManager: { type: string }
-                applicationDeadline: { type: string, format: date-time }
-                budget:
-                  type: array
-                  items: { type: number }
-                  example: [8, 12]
-                numberOfVacancies: { type: integer, example: 2 }
-                jobStatus:
-                  type: string
-                  example: "Active"
-                  description: Defaults to "Active" if omitted
-                createdBy: { type: string }
-                pipelineTemplateId: { type: string }
-                visibility:
-                  type: string
-                  enum: [internal, external]
-                  default: external
+              allOf:
+                - $ref: "#/components/schemas/JobOpeningInput"
+                - type: object
+                  required:
+                    [
+                      jobTitle,
+                      employmentType,
+                      workplaceType,
+                      experience,
+                      applicationDeadline,
+                    ]
+                  properties:
+                    createdBy: { type: string }
       responses:
         "200":
           description: Job opening created
@@ -283,37 +377,55 @@ paths:
           description: Unauthorized
         "403":
           description: Forbidden — owner/superuser only
+        "400":
+          description: Validation failed (validateJobOpening)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobOpeningValidationError" }
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/edit-job-opening/{_id}:
     put:
+      operationId: editJobOpening
       summary: Edit a job opening
-      description: Owner or admin only. Updates an existing job opening's fields.
+      description: >-
+        Owner or admin only. Updates an existing job opening's fields.
+        Re-validated with validateJobOpening (employmentType/workplaceType may
+        be omitted to keep the stored values; experience and
+        applicationDeadline are always required). Clearable fields
+        (department, experienceMax, preferredSkills, minQualification,
+        responsibilities, qualifications, recruiter, remoteScope) are cleared
+        when sent empty OR omitted, so send the full form on every edit.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner, admin or superuser only (requirePrivileged).
       tags: [Recruitment]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: _id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                jobTitle: { type: string }
-                jobDescription: { type: string }
-                requiredSkills: { type: string }
-                experience: { type: string }
-                hiringManager: { type: string }
-                applicationDeadline: { type: string, format: date-time }
-                budget: { type: array, items: { type: number } }
-                numberOfVacancies: { type: integer }
-                jobStatus: { type: string }
-                pipelineTemplateId: { type: string }
-                visibility: { type: string, enum: [internal, external] }
+              allOf:
+                - $ref: "#/components/schemas/JobOpeningInput"
+                - type: object
+                  required: [experience, applicationDeadline]
       responses:
         "200":
           description: Job opening updated
@@ -321,19 +433,45 @@ paths:
           description: Unauthorized
         "403":
           description: Forbidden — owner/admin only
+        "400":
+          description: Validation failed (validateJobOpening)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobOpeningValidationError" }
+        "404":
+          description: "Job opening not found"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/delete-job-opening/{_id}:
     delete:
+      operationId: deleteJobOpening
       summary: Delete a job opening
-      description: Owner or admin only. Removes a job opening.
+      description: >-
+        Owner or admin only. Removes a job opening.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner, admin or superuser only (requirePrivileged).
       tags: [Recruitment]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: _id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Job opening deleted
@@ -341,18 +479,34 @@ paths:
           description: Unauthorized
         "403":
           description: Forbidden — owner/admin only
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/bulk-delete-job-openings:
     put:
+      operationId: bulkDeleteJobOpenings
       summary: Bulk delete job openings
       description: >-
         Owner or admin only. Deletes multiple job openings by id; each
         deletion is attempted independently (Promise.allSettled) so one
         failure doesn't block the rest — response reports succeeded and
         failed ids separately.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner, admin or superuser only (requirePrivileged).
       tags: [Recruitment]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -391,37 +545,67 @@ paths:
           description: Unauthorized
         "403":
           description: Forbidden — owner/admin only
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-job-titles:
     get:
+      operationId: getJobTitles
       summary: Get all job titles
       description: >-
         Returns every job opening (no status filter, large page limit) for
         populating job-title pickers elsewhere in the app. Requires an
         authenticated tenant session (via the recruitment router's
         subscription guard) but no specific role.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Recruitment]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Job titles retrieved
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   # ── Applications ─────────────────────────────────────────────────────────────
 
   /api/v1/view-applications/{id}:
     get:
+      operationId: viewApplications
       summary: View applications for a job opening
       description: >-
         Owner/admin only. Returns candidates who applied for the given job
         opening id, paginated with a large default page size, merged with
         interviews/aadharNo/reason fields (stripped by the gRPC proto)
         fetched directly from the DB.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner, admin or superuser only (requirePrivileged).
       tags: [Recruitment]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -447,9 +631,18 @@ paths:
           description: Unauthorized
         "403":
           description: Forbidden — owner/admin only
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/resume-view-url:
     post:
+      operationId: getResumeViewUrl
       summary: Get a pre-signed URL to view an applicant's resume
       description: >-
         Owner/admin only. The S3 bucket has no public read access, so a
@@ -457,9 +650,16 @@ paths:
         pre-signed GET URL instead. Authorization is tenant-based: the key
         embeds the owning tenant id, which must match the caller's own
         tenantId.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner, admin or superuser only (requirePrivileged).
       tags: [Recruitment]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -490,17 +690,33 @@ paths:
           description: Unauthorized
         "403":
           description: Not this tenant's file, or path traversal attempt
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/update-candidate-status:
     put:
+      operationId: updateCandidateStatus
       summary: Update candidate application status
       description: >-
         Owner/admin only. Moves a candidate through the recruitment pipeline
         (legacy `interviews`-array flow). Shares the UpdateStatusRequest
         proto message with the resignation RPCs.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner, admin or superuser only (requirePrivileged).
       tags: [Recruitment]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -521,18 +737,34 @@ paths:
           description: Unauthorized
         "403":
           description: Forbidden — owner/admin only
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/hire-candidate:
     put:
+      operationId: hireCandidate
       summary: Hire a candidate
       description: >-
         Owner/admin only. Marks the application status "Hired". On success,
         best-effort generates an offer-letter PDF and emails it to the
         candidate — a PDF/email failure is logged but never fails the hire
         response itself.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner, admin or superuser only (requirePrivileged).
       tags: [Recruitment]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -564,14 +796,31 @@ paths:
           description: Unauthorized
         "403":
           description: Forbidden — owner/admin only
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/reject-application:
     put:
+      operationId: rejectApplication
       summary: Reject a job application
-      description: Owner/admin only. Rejects a candidate's application.
+      description: >-
+        Owner/admin only. Rejects a candidate's application.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner, admin or superuser only (requirePrivileged).
       tags: [Recruitment]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -592,9 +841,18 @@ paths:
           description: Unauthorized
         "403":
           description: Forbidden — owner/admin only
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/update-assigned-official-email:
     put:
+      operationId: updateAssignedOfficialEmail
       summary: Record the official email provisioned for a hire
       description: >-
         Owner/admin only. Lets HR/IT record the company email being
@@ -602,9 +860,16 @@ paths:
         so join-request approval can match by exact email instead of
         guessing from name similarity. Only allowed once the application
         status is "Hired".
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner, admin or superuser only (requirePrivileged).
       tags: [Recruitment]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -626,11 +891,20 @@ paths:
           description: Forbidden — owner/admin only
         "404":
           description: Application not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   # ── Interview scheduling ─────────────────────────────────────────────────────
 
   /api/v1/schedule-interview:
     put:
+      operationId: scheduleInterview
       summary: Schedule an interview round
       description: >-
         Owner/admin only. Upserts by roundNumber (not append-only) so
@@ -639,9 +913,16 @@ paths:
         scheduler's own connected calendar unless a manual meetLink is
         supplied; enforces the tenant's configured max interview rounds and
         that each round starts after the previous round's interview ends.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner, admin or superuser only (requirePrivileged).
       tags: [Recruitment]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -695,17 +976,33 @@ paths:
           description: Forbidden — owner/admin only
         "404":
           description: Application not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/reschedule-interview:
     put:
+      operationId: rescheduleInterview
       summary: Reschedule an interview round
       description: >-
         Superuser/owner only. Same scheduling rules as schedule-interview;
         additionally rejects rescheduling a round already marked
         interviewConducted.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Recruitment]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -733,16 +1030,32 @@ paths:
           description: Forbidden — owner/superuser only
         "404":
           description: Application not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/reassign-interviewer:
     put:
+      operationId: reassignInterviewer
       summary: Reassign the interviewer for a round
       description: >-
         Superuser/owner only. Rejects reassigning a round already marked
         interviewConducted.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Recruitment]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -766,16 +1079,29 @@ paths:
           description: Forbidden — owner/superuser only
         "404":
           description: Application or interview round not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-interviewer-list:
     get:
+      operationId: getInterviewerList
       summary: Get list of eligible interviewers
       description: >-
         Returns users who are superusers or hold the
         `JobOpenings:take_interview` permission.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Recruitment]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Interviewer list retrieved
@@ -796,18 +1122,33 @@ paths:
                         email: { type: string }
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/job-openings-insights:
     get:
+      operationId: jobOpeningsInsights
       summary: Job openings insights
       description: >-
         Owner/admin/HR only. Returns aggregate analytics — overview,
         applications-by-status, top-performing jobs, experience/budget
         breakdowns, deadline tracking, hiring-manager leaderboard, monthly
         posting trends, and actionable insights.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner, admin, HR or superuser only (requireHrPrivileged).
       tags: [Recruitment]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Insights retrieved
@@ -844,16 +1185,33 @@ paths:
           description: Unauthorized
         "403":
           description: Forbidden — owner/admin/HR only
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   # ── Resignations ─────────────────────────────────────────────────────────────
 
   /api/v1/add-resignation:
     post:
+      operationId: addResignation
       summary: Submit resignation
-      description: Employee submits their own resignation request.
+      description: >-
+        Employee submits their own resignation request.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Resignation]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -881,29 +1239,62 @@ paths:
           description: Resignation submitted
         "401":
           description: Unauthorized
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/my-resignation:
     get:
+      operationId: getMyResignation
       summary: Get the caller's own resignation
-      description: Returns the authenticated employee's most recent resignation, if any.
+      description: >-
+        Returns the authenticated employee's most recent resignation, if any.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Resignation]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Resignation retrieved
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/view-resignations:
     get:
+      operationId: viewResignations
       summary: View resignations
       description: >-
         Employees see only their own resignations; owner/admin/HR can pass
         `userId` to view another employee's, or omit it to see all.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Resignation]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: userId
           in: query
@@ -927,23 +1318,40 @@ paths:
           description: Resignations retrieved
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/approve-resignation/{_id}:
     put:
+      operationId: approveResignation
       summary: Approve a resignation
       description: >-
         No fixed role guard — resolved by the Approval Chain (the
         requester's reporting manager by default, or an owner/admin/
         superuser override). May forward to the next approver instead of
         finalizing, depending on the tenant's approval chain configuration.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Resignation]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: _id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: false
         content:
@@ -963,21 +1371,36 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant, or not authorized to act on this approval
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/reject-resignation/{_id}:
     put:
+      operationId: rejectResignation
       summary: Reject a resignation
       description: >-
         Same approval-chain resolution as approve-resignation, with
         `outcome: rejected`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Resignation]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: _id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: false
         content:
@@ -994,16 +1417,32 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant, or not authorized to act on this approval
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/bulk-approve-resignations:
     put:
+      operationId: bulkApproveResignations
       summary: Bulk approve resignations
       description: >-
         Loops actOnApprovalForEntity per id; each id succeeds/fails
         independently and both lists are returned.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Resignation]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -1048,16 +1487,34 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/bulk-reject-resignations:
     put:
+      operationId: bulkRejectResignations
       summary: Bulk reject resignations
       description: >-
         Loops actOnApprovalForEntity per id with outcome rejected; each id
         succeeds/fails independently.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Resignation]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -1080,21 +1537,38 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/withdraw-resignation/{_id}:
     put:
+      operationId: withdrawResignation
       summary: Withdraw a resignation
       description: >-
         The resignation's own owner, or a superuser acting on their behalf,
         may withdraw it.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Resignation]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: _id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Resignation withdrawn
@@ -1104,22 +1578,37 @@ paths:
           description: Not the resignation's owner and not a superuser
         "404":
           description: Resignation not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/update-resignation/{_id}:
     put:
+      operationId: updateResignation
       summary: Update resignation offboarding checkpoints
       description: >-
         Superuser/owner only. Records one of two offboarding checkpoints —
         "Assets Returned" or "FnF Done" (full-and-final settlement) — against
         a resignation.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Resignation]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: _id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -1143,17 +1632,33 @@ paths:
           description: Forbidden — owner/superuser only
         "404":
           description: Resignation not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/add-exit-feedback:
     post:
+      operationId: addExitFeedback
       summary: Submit exit interview feedback
       description: >-
         Employee submits exit feedback against their own most recent Approved
         resignation. Can only be submitted once (checked via
         qualityOfCommunication already being set).
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Resignation]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -1176,16 +1681,31 @@ paths:
             No approved resignation on file, or feedback already submitted
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/resignation-insights:
     get:
+      operationId: resignationInsights
       summary: Resignation insights
       description: >-
         Owner/admin/HR only. Returns resignation counts by status, approval
         rate, and departures due in the next 30 days.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner, admin, HR or superuser only (requireHrPrivileged).
       tags: [Resignation]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Insights retrieved
@@ -1218,3 +1738,151 @@ paths:
           description: Unauthorized
         "403":
           description: Forbidden — owner/admin/HR only
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+components:
+  schemas:
+    JobOpeningInput:
+      type: object
+      description: >-
+        Body for add-job-opening / edit-job-opening. The listed core fields
+        are read by the handler; the rest are validated and normalised by
+        validateJobOpening (services/recruitmentForms.ts). Validation failures
+        return 400 with `message` and the offending `field`. JSON-valued
+        fields (locations, applicationForm, screeningQuestions) may also be
+        sent as JSON strings.
+      properties:
+        jobTitle: { type: string, example: "Backend Developer" }
+        jobDescription: { type: string }
+        requiredSkills: { type: string, example: "Node.js, MongoDB" }
+        preferredSkills: { type: string, maxLength: 1000 }
+        hiringManager: { type: string }
+        recruiter: { type: string, maxLength: 120 }
+        department: { type: string, maxLength: 120 }
+        numberOfVacancies: { type: integer, example: 2 }
+        jobStatus:
+          type: string
+          example: "Active"
+          description: Defaults to "Active" on create if omitted.
+        pipelineTemplateId: { type: string }
+        employmentType:
+          type: string
+          enum: [full_time, part_time, contract, internship, temporary, other]
+          description: Required on create.
+        workplaceType:
+          type: string
+          enum: [onsite, hybrid, remote]
+          description: Required on create.
+        visibility:
+          type: string
+          enum: [external, internal, both]
+          default: external
+          description: internal-only openings never appear on the public careers page.
+        locations:
+          type: array
+          maxItems: 10
+          description: At least one (each with city and country) for onsite/hybrid.
+          items:
+            type: object
+            properties:
+              country: { type: string, maxLength: 80 }
+              state: { type: string, maxLength: 80 }
+              city: { type: string, maxLength: 80 }
+              office: { type: string, maxLength: 200 }
+        remoteScope:
+          type: string
+          enum: [anywhere, country, regions]
+          description: Remote openings only; defaults to anywhere.
+        remoteRegions:
+          type: array
+          maxItems: 30
+          description: Exactly one for remoteScope=country, at least one for regions.
+          items: { type: string, maxLength: 80 }
+        experience:
+          type: number
+          minimum: 0
+          maximum: 60
+          description: Minimum years of experience (required).
+          example: 3
+        experienceMax:
+          {
+            type: number,
+            minimum: 0,
+            maximum: 60,
+            description: Must be >= experience.,
+          }
+        budget:
+          type: array
+          description: "[min, max] in LPA; both or neither, min <= max."
+          items: { type: number, minimum: 0 }
+          example: [8, 12]
+        budgetDisclosed:
+          {
+            type: boolean,
+            description: Whether the budget is shown on the careers page.,
+          }
+        jobPostingDate:
+          { type: string, format: date, description: Not in the future. }
+        applicationDeadline:
+          type: string
+          format: date
+          description: Required; not before jobPostingDate, and a new or changed deadline can't be in the past.
+        minQualification: { type: string, maxLength: 200 }
+        responsibilities: { type: string, maxLength: 10000 }
+        qualifications: { type: string, maxLength: 10000 }
+        applicationForm:
+          type: object
+          description: Which candidate fields the careers form shows.
+          properties:
+            fields:
+              type: object
+              description: Profile field key (see CareerApplicationData.profile) -> mode.
+              additionalProperties:
+                { type: string, enum: [hidden, optional, required] }
+            resume:
+              { type: string, enum: [optional, required], default: required }
+            coverLetter:
+              {
+                type: string,
+                enum: [hidden, optional, required],
+                default: hidden,
+              }
+        screeningQuestions:
+          type: array
+          maxItems: 20
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              label: { type: string, maxLength: 300 }
+              type:
+                {
+                  type: string,
+                  enum:
+                    [
+                      short_text,
+                      long_text,
+                      select,
+                      multi_select,
+                      yes_no,
+                      number,
+                      date,
+                    ],
+                }
+              required: { type: boolean }
+              options: { type: array, items: { type: string } }
+              helpText: { type: string }
+              order: { type: integer }
+    JobOpeningValidationError:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string, example: "Choose an employment type." }
+        field: { type: string, example: "employmentType" }

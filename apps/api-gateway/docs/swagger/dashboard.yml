@@ -1,0 +1,333 @@
+# The Today dashboard (src/routes/dashboard.ts, handlers/dashboard.ts,
+# config/dashboardWidgets.ts, docs/dashboard-role-matrix.md). Business mount:
+# authenticate + requireTenant + active subscription. Each handler resolves the
+# caller's capabilities itself; widgets the caller may not see are never listed.
+components:
+  schemas:
+    DashboardLayoutEntry:
+      type: object
+      required: [id, visible, size, settings]
+      properties:
+        id: { type: string, example: "leave-balance" }
+        visible: { type: boolean, example: true }
+        size: { type: string, enum: [standard, wide] }
+        settings:
+          type: object
+          additionalProperties:
+            oneOf: [{ type: string }, { type: number }]
+          example: { team: "all" }
+
+paths:
+  /api/v1/dashboard:
+    get:
+      operationId: getDashboard
+      summary: Get my dashboard definition and layout
+      description: >-
+        Returns the caller's capabilities and personas, the widgets they may
+        place (with size and setting options), the default layout for their
+        role, and their saved layout (customized=true) or the default.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
+      tags: [Dashboard]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Dashboard definition
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      version: { type: integer, example: 1 }
+                      capabilities:
+                        type: array
+                        items:
+                          type: string
+                          enum:
+                            [
+                              self,
+                              teamLead,
+                              hr,
+                              orgAdmin,
+                              recruiting,
+                              payroll,
+                              advances,
+                              reviews,
+                              kyc,
+                              exits,
+                              helpdesk,
+                              assets,
+                              joinRequests,
+                              subscription,
+                            ]
+                      personas:
+                        type: array
+                        items:
+                          {
+                            type: string,
+                            enum:
+                              [
+                                executive,
+                                people-ops,
+                                recruiter,
+                                team-lead,
+                                employee,
+                              ],
+                          }
+                      widgets:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: string }
+                            sizes:
+                              {
+                                type: array,
+                                items: { type: string, enum: [standard, wide] },
+                              }
+                            defaultSize:
+                              { type: string, enum: [standard, wide] }
+                            source:
+                              {
+                                type: string,
+                                enum: [server, client],
+                                description: "server widgets load through GET /dashboard/data",
+                              }
+                            settings:
+                              type: object
+                              additionalProperties:
+                                type: object
+                                properties:
+                                  default: {}
+                                  options:
+                                    type: array
+                                    items:
+                                      type: object
+                                      properties:
+                                        value: {}
+                                        label: { type: string }
+                      defaults:
+                        type: array
+                        items:
+                          { $ref: "#/components/schemas/DashboardLayoutEntry" }
+                      layout:
+                        type: array
+                        items:
+                          { $ref: "#/components/schemas/DashboardLayoutEntry" }
+                      customized: { type: boolean }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/dashboard/data:
+    get:
+      operationId: getDashboardData
+      summary: Load data for dashboard widgets
+      description: >-
+        Loads the requested server-sourced widgets in parallel. Each widget
+        result is independent: an unknown id, a widget the caller may not
+        see, or a loader failure is reported inside that widget's entry and
+        the request still returns 200. Ids beyond the number of defined
+        widgets are ignored. The shape of `data` differs per widget.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
+      tags: [Dashboard]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: ids
+          in: query
+          required: false
+          description: Comma-separated widget ids.
+          schema: { type: string }
+          example: "my-day,approvals,leave-balance"
+      responses:
+        "200":
+          description: Per-widget results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      widgets:
+                        type: object
+                        additionalProperties:
+                          type: object
+                          properties:
+                            ok: { type: boolean }
+                            data:
+                              {
+                                description: Widget-specific payload when ok is true.,
+                              }
+                            settings: { type: object }
+                            error:
+                              {
+                                type: string,
+                                enum: [unknown, forbidden, failed],
+                              }
+                      generatedAt: { type: string, format: date-time }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/dashboard/preferences:
+    put:
+      operationId: saveDashboardPreferences
+      summary: Save my dashboard layout
+      description: >-
+        Stores the caller's layout. Entries for widgets the caller may not
+        see, unknown widgets and invalid settings are dropped (sanitizeLayout)
+        and the cleaned layout is returned.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
+      tags: [Dashboard]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version, widgets]
+              properties:
+                version:
+                  type: integer
+                  enum: [1]
+                  description: Must equal the current PREFERENCES_VERSION (1).
+                widgets:
+                  type: array
+                  description: At most twice the number of defined widgets.
+                  items: { $ref: "#/components/schemas/DashboardLayoutEntry" }
+            example:
+              version: 1
+              widgets:
+                - { id: "my-day", visible: true, size: "wide", settings: {} }
+                - {
+                    id: "leave-balance",
+                    visible: true,
+                    size: "standard",
+                    settings: {},
+                  }
+      responses:
+        "200":
+          description: Saved layout
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      layout:
+                        {
+                          type: array,
+                          items:
+                            {
+                              $ref: "#/components/schemas/DashboardLayoutEntry",
+                            },
+                        }
+                      customized: { type: boolean, example: true }
+        "400":
+          description: '"Unsupported dashboard layout." (wrong version or widgets not an array) or "Too many widgets."'
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+    delete:
+      operationId: resetDashboardPreferences
+      summary: Reset my dashboard layout
+      description: >-
+        Deletes the saved layout and returns the role default.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
+      tags: [Dashboard]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Default layout
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      layout:
+                        {
+                          type: array,
+                          items:
+                            {
+                              $ref: "#/components/schemas/DashboardLayoutEntry",
+                            },
+                        }
+                      customized: { type: boolean, example: false }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"

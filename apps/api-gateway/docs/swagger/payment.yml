@@ -1,6 +1,7 @@
 paths:
   /api/v1/payment/create-subscription:
     post:
+      operationId: createSubscription
       summary: Create a Razorpay subscription
       description: >
         Creates a Razorpay subscription for the given tier/billing (creating
@@ -12,9 +13,15 @@ paths:
         explicitly) and by an existing tenant's "Renew" flow (tier defaults to
         the tenant's current `planTier` if omitted). Requires only
         `authenticate`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); owner, admin, superuser or a Subscription:* permission holder (requireSubscriptionManager; passes when the caller has no organisation yet).
       tags: [Payment]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
       requestBody:
         required: false
         content:
@@ -67,9 +74,23 @@ paths:
                         description: Only for a trial — when the first charge is due.
         "401":
           description: Unauthorized
+        "400":
+          description: "Free trials are only available when creating an organisation. / … supports up to … employees. You currently have … — choose a higher tier."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/payment/trial-eligibility:
     get:
+      operationId: getTrialEligibility
       summary: Can the caller's new organisation have a free trial?
       description: >
         Authenticated-only (no tenant yet), for the org-setup plan step.
@@ -77,9 +98,13 @@ paths:
         account, its company email domain and the mandate's UPI handle — the
         binding, race-safe check runs when the organisation is created. Always
         `eligible: false` from inside an existing tenant.
+
+
+        Access: authenticated (bearer token or `access_token` cookie).
       tags: [Payment]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Eligibility and trial length
@@ -103,18 +128,31 @@ paths:
                             trial_used,
                           ]
                       message: { type: string }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/payment/pending-setup:
     get:
+      operationId: getPendingSetup
       summary: Check for a recoverable pending subscription
       description: >
         Polls whether the caller has a pending Razorpay subscription recorded
         server-side and whether it's actually been paid
         (`subscriptions.fetch` status `authenticated` or `active`). Clears
         the pending record if it's stale/unpaid. Requires only `authenticate`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie).
       tags: [Payment]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Pending-setup status
@@ -136,9 +174,16 @@ paths:
                         }
         "401":
           description: Unauthorized
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/payment/plan-pricing:
     get:
+      operationId: getPlanPricing
       summary: Get plan pricing and tier limits
       description: >
         Returns the backend's flat-fee pricing table (`PLAN_PRICING`, in
@@ -147,9 +192,13 @@ paths:
         Authenticated-only — deliberately **not** gated by `requireTenant` —
         needed by the org-setup wizard's plan step before a tenant exists, as
         well as by the Subscription page afterwards.
+
+
+        Access: authenticated (bearer token or `access_token` cookie).
       tags: [Payment]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Pricing table
@@ -176,9 +225,16 @@ paths:
                       activeEmployeeCount: { type: integer, example: 12 }
         "401":
           description: Unauthorized
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/payment/cancel-subscription:
     post:
+      operationId: cancelSubscription
       summary: Cancel subscription
       description: >
         Schedules the Razorpay subscription for cancellation at the end of
@@ -188,9 +244,15 @@ paths:
         wait for the `subscription.cancelled` webhook).
         `requireActiveSubscription` continues to allow access until
         `planExpiresAt` passes. Requires `requireTenant`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); no subscription check; owner, admin, superuser or a Subscription:* permission holder (requireSubscriptionManager; passes when the caller has no organisation yet).
       tags: [Payment]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
       responses:
         "200":
           description: Cancellation scheduled
@@ -209,9 +271,18 @@ paths:
           description: No subscription found, or subscription is not active/grace_period
         "401":
           description: Unauthorized
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/payment/reactivate-subscription:
     post:
+      operationId: reactivateSubscription
       summary: Reactivate a cancelled subscription via a new payment
       description: >
         Re-authorizes billing on the tenant using a fresh Razorpay checkout
@@ -220,9 +291,15 @@ paths:
         then updates the tenant's `razorpaySubscriptionId`,
         `subscriptionStatus` (`active`), `planActivatedAt`, and
         `planExpiresAt`. Requires `requireTenant`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); no subscription check; owner, admin, superuser or a Subscription:* permission holder (requireSubscriptionManager; passes when the caller has no organisation yet).
       tags: [Payment]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
       requestBody:
         required: true
         content:
@@ -256,9 +333,18 @@ paths:
           description: Missing payment details, or signature verification failed
         "401":
           description: Unauthorized
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/payment/change-plan:
     post:
+      operationId: changePlan
       summary: Change plan tier and/or billing period
       description: >
         Computes and (for a same-billing tier upgrade) charges the prorated
@@ -273,9 +359,15 @@ paths:
         immediate-upgrade path — it only returns a Razorpay order; payment
         must be completed and confirmed via `POST
         /payment/confirm-plan-upgrade`. Requires `requireTenant`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); no subscription check; owner, admin, superuser or a Subscription:* permission holder (requireSubscriptionManager; passes when the caller has no organisation yet).
       tags: [Payment]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
       requestBody:
         required: true
         content:
@@ -333,9 +425,18 @@ paths:
             count exceeds the target tier's limit
         "401":
           description: Unauthorized
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/payment/confirm-plan-upgrade:
     post:
+      operationId: confirmPlanUpgrade
       summary: Confirm a paid, prorated plan upgrade
       description: >
         Completes the immediate-upgrade path started by `POST
@@ -346,9 +447,15 @@ paths:
         `planExpiresAt`/renewal date is unchanged, only the price from here on
         changes) and clears any pending downgrade fields. Requires
         `requireTenant`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); no subscription check; owner, admin, superuser or a Subscription:* permission holder (requireSubscriptionManager; passes when the caller has no organisation yet).
       tags: [Payment]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
       requestBody:
         required: true
         content:
@@ -391,9 +498,18 @@ paths:
             subscription found
         "401":
           description: Unauthorized
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/payment/start-payment-method-change:
     post:
+      operationId: startPaymentMethodChange
       summary: Start a payment method change
       description: >
         Razorpay has no in-place way to swap a subscription's payment
@@ -403,9 +519,15 @@ paths:
         more than 24h left, defers its first real charge to the existing
         `planExpiresAt` via `start_at` so Checkout only runs a small,
         auto-refunded authorization charge. Requires `requireTenant`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); no subscription check; owner, admin, superuser or a Subscription:* permission holder (requireSubscriptionManager; passes when the caller has no organisation yet).
       tags: [Payment]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
       responses:
         "200":
           description: New subscription created for authorization via Checkout
@@ -426,9 +548,18 @@ paths:
           description: No subscription found, or subscription is not active/grace_period
         "401":
           description: Unauthorized
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/payment/confirm-payment-method-change:
     post:
+      operationId: confirmPaymentMethodChange
       summary: Confirm a payment method change
       description: >
         Completes the swap started by `POST
@@ -438,9 +569,15 @@ paths:
         onto the tenant, then best-effort cancels the old one (if that
         cancel fails, `previousRazorpaySubscriptionId` is left set for
         `subscriptionReconciler.ts` to retry). Requires `requireTenant`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); no subscription check; owner, admin, superuser or a Subscription:* permission holder (requireSubscriptionManager; passes when the caller has no organisation yet).
       tags: [Payment]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
       requestBody:
         required: true
         content:
@@ -477,9 +614,18 @@ paths:
             invalid
         "401":
           description: Unauthorized
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/payment/webhook:
     post:
+      operationId: handleWebhook
       summary: Razorpay payment gateway webhook (server-to-server)
       description: >
         Receives subscription lifecycle events from Razorpay's payment
@@ -514,7 +660,11 @@ paths:
         `subscriptionStatus` to `cancelled` (confirms a cancellation already
         set synchronously by `POST /payment/cancel-subscription`, or one
         made directly in the Razorpay dashboard).
+
+
+        Access: public — no authentication.
       tags: [Payment]
+      security: []
       requestBody:
         required: true
         content:
@@ -560,3 +710,11 @@ paths:
           description: Invalid/missing signature
         "500":
           description: RAZORPAY_WEBHOOK_SECRET not configured, or internal error
+        "503":
+          description: The same event (x-razorpay-event-id) is still being processed by another delivery; Razorpay retries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: false }

@@ -1,0 +1,408 @@
+# Employee availability (src/routes/presence.ts, handlers/presence.ts,
+# services/presence.ts; docs/presence.md). Mounted at /api/v1/presence behind
+# authenticate + requireTenant + idempotency but NOT the subscription check.
+components:
+  schemas:
+    PresenceView:
+      type: object
+      properties:
+        userId: { type: string, example: "6650c2f1a9b3c4d5e6f70812" }
+        availability:
+          type: string
+          enum: [available, busy, dnd, meeting, break, lunch, focusing, away]
+        status:
+          type: string
+          description: availability, or "offline" when no session is connected.
+          enum:
+            [
+              available,
+              busy,
+              dnd,
+              meeting,
+              break,
+              lunch,
+              focusing,
+              away,
+              offline,
+            ]
+        connectivity: { type: string, enum: [online, idle, offline] }
+        source: { type: string, enum: [manual, default] }
+        message: { type: string, nullable: true, example: "Back at 3" }
+        expiresAt: { type: string, format: date-time, nullable: true }
+        workMode:
+          { type: string, enum: [office, remote, field], nullable: true }
+        lastSeenAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Only set while offline.
+        revision: { type: integer, example: 4 }
+        at:
+          type: integer
+          description: Server time of this snapshot in epoch milliseconds.
+          example: 1762934400000
+    OwnPresence:
+      allOf:
+        - $ref: "#/components/schemas/PresenceView"
+        - type: object
+          properties:
+            previous:
+              type: object
+              nullable: true
+              description: The untimed status a timed one returns to.
+              properties:
+                availability: { type: string }
+                message: { type: string, nullable: true }
+            timeZone: { type: string, nullable: true, example: "Asia/Kolkata" }
+    PresenceWriteResult:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: object
+          properties:
+            presence: { $ref: "#/components/schemas/OwnPresence" }
+            changed:
+              type: boolean
+              description: false when the request left the status as it was.
+
+paths:
+  /api/v1/presence/me:
+    get:
+      operationId: getMyPresence
+      summary: Get my availability
+      description: >-
+        The caller's own status plus the client settings the web app uses
+        for idle detection and heartbeats.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); no subscription check.
+      tags: [Presence]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Own presence and client config
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      presence: { $ref: "#/components/schemas/OwnPresence" }
+                      config:
+                        type: object
+                        properties:
+                          idleAfterSeconds:
+                            type: integer
+                            description: PRESENCE_IDLE_SECONDS (60-3600, default 300).
+                            example: 300
+                          heartbeatSeconds: { type: number, example: 60 }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+    put:
+      operationId: updateMyPresence
+      summary: Set my availability or message
+      description: >-
+        Changes only the caller's own status; there is no route that writes
+        another person's presence. At least one of availability or message is
+        required, and duration needs an availability. Unknown fields are
+        rejected (strict schema). The new view is published over Socket.IO
+        (services/presence.ts broadcast).
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); no subscription check.
+      tags: [Presence]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                availability:
+                  type: string
+                  enum:
+                    [
+                      available,
+                      busy,
+                      dnd,
+                      meeting,
+                      break,
+                      lunch,
+                      focusing,
+                      away,
+                    ]
+                message:
+                  type: string
+                  nullable: true
+                  maxLength: 500
+                  description: null clears the message.
+                duration:
+                  type: string
+                  enum: ["30m", "1h", "2h", end_of_day, until_changed]
+                timeZone:
+                  type: string
+                  maxLength: 64
+                  description: IANA zone used to resolve end_of_day.
+            example:
+              availability: meeting
+              message: "Sprint planning"
+              duration: "1h"
+              timeZone: "Asia/Kolkata"
+      responses:
+        "200":
+          description: Status saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PresenceWriteResult" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/presence/me/restore:
+    post:
+      operationId: restoreMyPresence
+      summary: Return to my previous status
+      description: >-
+        Ends a timed status early and returns to the previous untimed one (or Available).
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); no subscription check.
+      tags: [Presence]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Restored
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PresenceWriteResult" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/presence/me/message:
+    delete:
+      operationId: clearMyPresenceMessage
+      summary: Clear my status message
+      description: >-
+        Removes the message and keeps the current availability.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); no subscription check.
+      tags: [Presence]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Message cleared
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PresenceWriteResult" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/presence:
+    get:
+      operationId: getPresenceBatch
+      summary: Get presence for a set of people
+      description: >-
+        Batched lookup used by avatars across the app. People the caller is
+        not allowed to see are silently left out rather than reported as
+        errors.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); no subscription check.
+      tags: [Presence]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: ids
+          in: query
+          required: true
+          description: Comma-separated user ids (24-hex ObjectIds), at most 500, string at most 13000 characters.
+          schema: { type: string, maxLength: 13000 }
+          example: "6650c2f1a9b3c4d5e6f70812,6650c2f1a9b3c4d5e6f70813"
+      responses:
+        "200":
+          description: Presence of the visible people
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      presence:
+                        type: array
+                        items: { $ref: "#/components/schemas/PresenceView" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/presence/people:
+    get:
+      operationId: getPresencePeople
+      summary: List people with their availability
+      description: >-
+        The Availability page. scope=team lists active people who share a
+        team with the caller; scope=organisation lists everyone and is only
+        allowed for callers with organisation-wide visibility. Sorted by
+        status rank, then name.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); no subscription check.
+      tags: [Presence]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: scope
+          in: query
+          schema: { type: string, enum: [team, organisation], default: team }
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum:
+              [
+                available,
+                busy,
+                dnd,
+                meeting,
+                break,
+                lunch,
+                focusing,
+                away,
+                offline,
+              ]
+        - name: search
+          in: query
+          description: Name/username filter, at most 80 characters.
+          schema: { type: string, maxLength: 80 }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 25 }
+      responses:
+        "200":
+          description: One page of people
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      people:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: string }
+                            username: { type: string }
+                            name: { type: string, example: "Asha Rao" }
+                            designation: { type: string, nullable: true }
+                            department: { type: string, nullable: true }
+                            photo: { type: string, nullable: true }
+                            presence:
+                              { $ref: "#/components/schemas/PresenceView" }
+                      counts:
+                        type: object
+                        description: Number of matching people per display status.
+                        additionalProperties: { type: integer }
+                      total: { type: integer }
+                      truncated:
+                        type: boolean
+                        description: true when the candidate set was capped before filtering.
+                      page: { type: integer }
+                      limit: { type: integer }
+                      scopes:
+                        type: object
+                        description: Which scopes the caller may use.
+                        properties:
+                          team: { type: boolean }
+                          organisation: { type: boolean }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: scope=organisation without organisation-wide visibility ("You can see the availability of your own teams only."), or PENDING_TENANT_SETUP.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
