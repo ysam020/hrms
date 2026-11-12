@@ -1,0 +1,176 @@
+# Shared OpenAPI components reused by every other file in this folder.
+# swagger-jsdoc merges the `components` of all docs/swagger/*.yml files.
+#
+# Cross-cutting behaviour of the API gateway (see src/server.ts and
+# src/routes/index.ts) documented here once:
+#   - authenticate (middleware/authenticate.ts) reads the access JWT from
+#     `Authorization: Bearer <jwt>` OR the `access_token` cookie.
+#   - doubleCsrfProtection (config/csrf.ts) guards every POST/PUT/PATCH/DELETE
+#     except the MCP/OAuth endpoints and the two payment webhooks, which are
+#     mounted before it. Get a token from GET /api/v1/csrf-token.
+#   - idempotency (middleware/idempotency.ts) honours `Idempotency-Key` on
+#     mutations behind the business, support, platform, walkthrough and
+#     presence mounts.
+#   - Business routes also run requireTenant + requireActiveSubscription.
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: access_token
+      description: >-
+        The same access JWT as bearerAuth, sent as the httpOnly `access_token`
+        cookie set at sign-in (browser clients). authenticate() accepts
+        either; the Authorization header wins when both are present.
+
+  parameters:
+    CsrfToken:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      description: >-
+        Double-submit CSRF token from GET /api/v1/csrf-token. Must be sent
+        with the matching `csrf-token` cookie that the same call sets.
+        Required on every POST/PUT/PATCH/DELETE under /api/v1 (the two
+        payment webhooks are exempt). A missing or wrong token is refused
+        with 403 before any route runs.
+      schema:
+        type: string
+        example: "5f2b0c9e8d...e41a"
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: >-
+        Optional. 16-128 characters of [A-Za-z0-9_-]. The first request
+        with a key runs normally and its response is kept for 24 hours; a
+        retry with the same key and the same method, path and body replays
+        that response without running the handler again. A retry while the
+        first is still running gets 409 with Retry-After; the same key with
+        a different request gets 422. 5xx, 401, 403, 408 and 429 responses
+        are not stored. Keys are scoped to the authenticated tenant and user.
+      schema:
+        type: string
+        pattern: "^[A-Za-z0-9_-]{16,128}$"
+        example: "offline-q-7c1d9a3e2b4f4a10"
+    PageParam:
+      name: page
+      in: query
+      required: false
+      description: 1-based page number (parsePagination; invalid values fall back to 1).
+      schema: { type: integer, minimum: 1, default: 1 }
+    LimitParam:
+      name: limit
+      in: query
+      required: false
+      description: Page size; capped server-side (parsePagination).
+      schema: { type: integer, minimum: 1 }
+
+  schemas:
+    ErrorResponse:
+      type: object
+      description: >-
+        Error body. Responses built with apiResponse() carry
+        `success: false`; responses written directly by middleware
+        (authenticate, requireTenant, rate limiters, role guards) carry only
+        `message` and sometimes `code`.
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string, example: "Validation error" }
+        code:
+          type: string
+          description: Stable machine-readable code, when the server sets one.
+          example: "SESSION_REVOKED"
+      required: [message]
+    SuccessMessage:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string }
+      required: [success]
+
+  responses:
+    BadRequest:
+      description: >-
+        Validation failed (the first Zod error message is returned) or a
+        downstream service rejected the input.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example: { success: false, message: "Required" }
+    Unauthorized:
+      description: >-
+        No access token, an invalid/expired token ("Invalid or expired
+        token"), or a session that is no longer valid because the account
+        was terminated, removed or the organisation deactivated
+        (code SESSION_REVOKED).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example: { message: "Unauthorized" }
+    Forbidden:
+      description: >-
+        The caller lacks the role or permission this operation needs, or the
+        CSRF token is missing/invalid on a mutation. Routes behind
+        requireTenant also return 403 with code PENDING_TENANT_SETUP when the
+        token has no organisation yet.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example: { message: "Forbidden" }
+    SubscriptionRequired:
+      description: >-
+        The organisation's subscription or trial has ended
+        (requireActiveSubscription). Successful responses on these routes may
+        carry X-Subscription-Trial, X-Subscription-Grace-Period,
+        X-Subscription-Cancelled and X-Plan-Expires-At headers.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            message: "Your subscription has expired. Please renew to continue."
+    NotFound:
+      description: The resource does not exist in the caller's organisation.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example: { success: false, message: "Record not found" }
+    Conflict:
+      description: >-
+        Conflicting state (for example a duplicate record, Prisma P2002), or
+        an Idempotency-Key whose first request is still running.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            {
+              success: false,
+              message: "A record with this data already exists",
+            }
+    TooManyRequests:
+      description: Rate limit exceeded (express-rate-limit, Redis-backed).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example: { message: "Too many requests, please try again later" }
+    ServerError:
+      description: Unexpected server or downstream failure.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example: { success: false, message: "Internal Server Error" }
+    AuthCheckUnavailable:
+      description: >-
+        The live account check behind authenticate could not complete
+        (database timeout or circuit breaker open). Not a sign-out: keep the
+        session and retry after the Retry-After header (5 s).
+      headers:
+        Retry-After:
+          schema: { type: integer, example: 5 }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            message: "Temporarily unable to verify your session. Please retry."
+            code: "AUTH_CHECK_UNAVAILABLE"

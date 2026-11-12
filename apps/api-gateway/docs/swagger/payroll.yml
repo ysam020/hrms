@@ -1,6 +1,7 @@
 paths:
   /api/v1/payroll/runs:
     post:
+      operationId: initiatePayrollRun
       summary: Initiate a payroll run
       description: >-
         Initiates a new payroll run for a past month/year (never the current
@@ -13,9 +14,16 @@ paths:
         duplicate run for the same period. Restricted to owner/admin/hr.
         Employees with no salary structure configured are skipped (returned
         in `skippedEmployees`) rather than given a ₹0 payslip.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Payroll]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -74,17 +82,30 @@ paths:
           description: Forbidden — only owner/admin/hr can initiate payroll runs
         "409":
           description: A payroll run for this month/year already exists
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
     get:
+      operationId: listPayrollRuns
       summary: List payroll runs
       description: >-
         Lists payroll runs for the tenant, newest period first. `search`
         resolves to a year (4-digit), a month name (with optional year,
         e.g. "March 2026"), or falls back to a contains-match on `notes`.
         Restricted to owner/admin/hr.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Payroll]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: status
           in: query
@@ -128,17 +149,30 @@ paths:
           description: Unauthorized
         "403":
           description: Forbidden — only owner/admin/hr can list payroll runs
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/payroll/runs/{runId}:
     get:
+      operationId: getPayrollRun
       summary: Get a payroll run's detail
       description: >-
         Returns a single payroll run with its full line-items, each enriched
         with the employee's username/name/designation/department. Restricted
         to owner/admin/hr.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Payroll]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: runId
           in: path
@@ -163,9 +197,18 @@ paths:
           description: Forbidden — only owner/admin/hr can view payroll runs
         "404":
           description: Payroll run not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/payroll/runs/status:
     patch:
+      operationId: updatePayrollRunStatus
       summary: Transition a payroll run's lifecycle status
       description: >-
         Moves a run through draft → processing → approved → disbursed |
@@ -182,9 +225,16 @@ paths:
         "disbursing" (202 Accepted), and the job later flips it to
         "disbursed" once RazorpayX payouts and payslip generation complete.
         Concurrent status updates on the same run are rejected with 409.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Payroll]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -253,9 +303,16 @@ paths:
           description: Run was already updated by another concurrent request
         "500":
           description: Failed to enqueue the disbursement job — run status was rolled back
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/payroll/runs/{runId}/retry-payouts:
     post:
+      operationId: retryFailedPayouts
       summary: Retry failed payouts for a disbursed/failed run
       description: >-
         Re-enqueues the disbursement job for a run whose bank payouts didn't
@@ -264,14 +321,20 @@ paths:
         (run status "disbursement_failed"). Only re-processes line items not
         already in a terminal payout state, so it's safe to call repeatedly
         without double-paying. Restricted to owner/admin.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Payroll]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: runId
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "202":
           description: Retry job enqueued — poll GET /payroll/runs/{runId} for progress
@@ -305,18 +368,32 @@ paths:
           description: Run is already being retried by another concurrent request
         "500":
           description: Failed to enqueue the retry job — run status was rolled back
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/payroll/advances:
     post:
+      operationId: requestSalaryAdvance
       summary: Request a salary advance
       description: >-
         Any authenticated employee requests a salary advance against their
         salary, to be recovered via monthly EMI deductions from future
         payslips. Only one active advance (Pending/Approved/Repaying) is
         allowed per employee at a time.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Payroll]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -355,17 +432,34 @@ paths:
           description: Unauthorized
         "409":
           description: Caller already has an active salary advance
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
     get:
+      operationId: listSalaryAdvances
       summary: List salary advances
       description: >-
         HR/owner/admin (or a holder of the
         SalaryManagement:approve_advance permission) see every employee's
         advances, with an optional name/username search; any other
         authenticated employee only ever sees their own.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Payroll]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: status
           in: query
@@ -401,9 +495,20 @@ paths:
                   total: { type: integer }
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/payroll/advances/status:
     patch:
+      operationId: updateSalaryAdvanceStatus
       summary: Approve or reject a salary advance
       description: >-
         Transitions a Pending advance to Approved or Rejected. HR may
@@ -411,9 +516,16 @@ paths:
         ceil(amount / emiAmount). Restricted to owner/admin/hr or a holder of
         the SalaryManagement:approve_advance permission. Concurrent updates
         on the same advance are rejected with 409.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Payroll]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -450,18 +562,31 @@ paths:
           description: Advance not found
         "409":
           description: Advance was already updated by another concurrent request
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/payroll/my-payslips:
     get:
+      operationId: getMyPayslips
       summary: Get the current employee's payslip history
       description: >-
         Returns one payslip per disbursed PayrollRun the caller has a
         PayrollLineItem in — sourced from the actual, attendance-prorated
         amount that was disbursed, not from the live SalaryStructure. Sorted
         newest period first.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Payroll]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: page
           in: query
@@ -505,3 +630,13 @@ paths:
                   total: { type: integer }
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"

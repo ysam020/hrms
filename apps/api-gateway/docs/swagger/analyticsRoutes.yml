@@ -1,14 +1,19 @@
 paths:
   /api/v1/get-employment-type-breakdown:
     get:
+      operationId: getEmploymentTypeBreakdown
       summary: Employment type breakdown
       description: >
         Returns the count of active employees working from home (WFH) vs. in-office.
         Result is cached per tenant. Requires super-user privileges — the tenant owner,
         or a user with `isSuperUser` set, via `requireSuperUser`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Workforce Analytics]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Employment type breakdown retrieved
@@ -35,17 +40,28 @@ paths:
           description: Subscription expired
         "403":
           description: Forbidden — requires super-user privileges
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-employee-status-distribution:
     get:
+      operationId: getEmployeeStatusDistribution
       summary: Employee status distribution
       description: >
         Returns employee count grouped by `employeeStatus` (e.g. Active, Resigned,
         Terminated, Absconded), sorted descending by count. Result is cached per tenant.
         Requires super-user privileges.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Workforce Analytics]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Employee status distribution retrieved
@@ -69,16 +85,27 @@ paths:
           description: Subscription expired
         "403":
           description: Forbidden — requires super-user privileges
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-employee-departments:
     get:
+      operationId: getEmployeeDepartments
       summary: Employee count by department
       description: >
         Returns the number of active employees in each non-null department. Result is
         cached per tenant. Requires super-user privileges.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Workforce Analytics]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Employee departments retrieved
@@ -102,16 +129,27 @@ paths:
           description: Subscription expired
         "403":
           description: Forbidden — requires super-user privileges
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-employee-designations:
     get:
+      operationId: getEmployeeDesignations
       summary: Employee count by designation
       description: >
         Returns the number of active employees at each non-null designation. Result is
         cached per tenant. Requires super-user privileges.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Workforce Analytics]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Employee designations retrieved
@@ -135,18 +173,29 @@ paths:
           description: Subscription expired
         "403":
           description: Forbidden — requires super-user privileges
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-age-distribution:
     get:
+      operationId: getAgeDistribution
       summary: Employee age distribution
       description: >
         Buckets employees with a known date of birth into age bands (<25, 25-34, 35-44,
         45-54, 55+) via a MongoDB `$bucket` aggregation. Requires a tenant context — fails
         with 500 if none is present. Result is cached per tenant. Requires super-user
         privileges.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Workforce Analytics]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Age distribution retrieved
@@ -176,17 +225,26 @@ paths:
           description: Forbidden — requires super-user privileges
         "500":
           description: Internal Server Error — no tenant context on request
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-joining-data:
     get:
+      operationId: getJoiningData
       summary: Employee joining data over time
       description: >
         Returns employee joining counts grouped by year-month (`YYYY-MM`), sorted
         ascending. Requires a tenant context — fails with 500 if none is present. Result
         is cached per tenant. Requires super-user privileges.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Workforce Analytics]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Joining data retrieved
@@ -212,17 +270,26 @@ paths:
           description: Forbidden — requires super-user privileges
         "500":
           description: Internal Server Error — no tenant context on request
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-tenure-distribution:
     get:
+      operationId: getTenureDistribution
       summary: Employee tenure distribution
       description: >
         Buckets active employees by years of service (<1, 1-2, 2-3, 3-5, 5+ years) via a
         MongoDB `$bucket` aggregation. Requires a tenant context — fails with 500 if none
         is present. Result is cached per tenant. Requires super-user privileges.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Workforce Analytics]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Tenure distribution retrieved
@@ -259,18 +326,27 @@ paths:
           description: Forbidden — requires super-user privileges
         "500":
           description: Internal Server Error — no tenant context on request
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-headcount-growth:
     get:
+      operationId: getHeadcountGrowth
       summary: Headcount growth over the trailing 12 months
       description: >
         Returns per-month new joinings and cumulative headcount for the trailing 12
         months, seeded from a baseline count of employees who joined before the window.
         Requires a tenant context — fails with 500 if none is present. Result is cached
         per tenant. Requires super-user privileges.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Workforce Analytics]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Headcount growth data retrieved
@@ -298,17 +374,26 @@ paths:
           description: Forbidden — requires super-user privileges
         "500":
           description: Internal Server Error — no tenant context on request
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-leave-approval-rate:
     get:
+      operationId: getLeaveApprovalRate
       summary: Leave approval rate
       description: >
         Returns the percentage of leave applications approved, along with the underlying
         approved/pending/rejected/total counts. Result is cached per tenant. Requires
         super-user privileges.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Workforce Analytics]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Leave approval rate retrieved
@@ -333,16 +418,27 @@ paths:
           description: Subscription expired
         "403":
           description: Forbidden — requires super-user privileges
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-leave-type-breakdown:
     get:
+      operationId: getLeaveTypeBreakdown
       summary: Leave type breakdown
       description: >
         Returns leave application count and total days grouped by leave type. Result is
         cached per tenant. Requires super-user privileges.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Workforce Analytics]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Leave type breakdown retrieved
@@ -367,17 +463,28 @@ paths:
           description: Subscription expired
         "403":
           description: Forbidden — requires super-user privileges
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-monthly-leave-patterns:
     get:
+      operationId: getMonthlyLeavePatterns
       summary: Monthly leave patterns
       description: >
         Returns the count of approved leave applications (by start date) grouped by
         year-month over the trailing 12 months. Requires a tenant context — fails with 500
         if none is present. Result is cached per tenant. Requires super-user privileges.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Workforce Analytics]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Monthly leave patterns retrieved
@@ -403,18 +510,27 @@ paths:
           description: Forbidden — requires super-user privileges
         "500":
           description: Internal Server Error — no tenant context on request
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-attendance-trends:
     get:
+      operationId: getAttendanceTrends
       summary: Attendance trends
       description: >
         Returns monthly attendance rate and average working hours over the trailing 12
         months. "Present" is counted as status in Present, Late, or Half Day. Requires a
         tenant context — fails with 500 if none is present. Result is cached per tenant.
         Requires super-user privileges.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Workforce Analytics]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Attendance trends retrieved
@@ -445,18 +561,27 @@ paths:
           description: Forbidden — requires super-user privileges
         "500":
           description: Internal Server Error — no tenant context on request
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-working-hours-distribution:
     get:
+      operationId: getWorkingHoursDistribution
       summary: Working hours distribution
       description: >
         Buckets attendance records (over the trailing 12 months) by daily working hours
         (<4h, 4-6h, 6-8h, 8-9h, 9+h) via a MongoDB `$bucket` aggregation. Requires a tenant
         context — fails with 500 if none is present. Result is cached per tenant. Requires
         super-user privileges.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Workforce Analytics]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Working hours distribution retrieved
@@ -486,16 +611,25 @@ paths:
           description: Forbidden — requires super-user privileges
         "500":
           description: Internal Server Error — no tenant context on request
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-job-openings-by-status:
     get:
+      operationId: getJobOpeningsByStatus
       summary: Job openings by status
       description: >
         Returns job opening count grouped by status. Result is cached per tenant. Requires
         super-user privileges.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Recruitment Analytics]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Job openings by status retrieved
@@ -519,9 +653,16 @@ paths:
           description: Subscription expired
         "403":
           description: Forbidden — requires super-user privileges
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-applications-by-job-role:
     get:
+      operationId: getApplicationsByJobRole
       summary: Applications by job role
       description: >
         Returns application counts per job title, broken down into total, interviewing
@@ -529,9 +670,13 @@ paths:
         Scheduled/Completed/Cleared"), hired, and rejected. There is no "Shortlisted" or
         "Offered" status in the recruitment pipeline, so those are not tracked separately.
         Result is cached per tenant. Requires super-user privileges.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Recruitment Analytics]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Applications by job role retrieved
@@ -558,18 +703,29 @@ paths:
           description: Subscription expired
         "403":
           description: Forbidden — requires super-user privileges
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-hiring-funnel:
     get:
+      operationId: getHiringFunnel
       summary: Hiring funnel metrics
       description: >
         Returns candidate counts at each stage of the recruitment pipeline (applied,
         interviewing, hired, rejected) plus the interviewing rate and hire rate as
         percentages of total applications. Result is cached per tenant. Requires
         super-user privileges.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Recruitment Analytics]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Hiring funnel data retrieved
@@ -595,18 +751,29 @@ paths:
           description: Subscription expired
         "403":
           description: Forbidden — requires super-user privileges
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-hiring-manager-performance:
     get:
+      operationId: getHiringManagerPerformance
       summary: Hiring manager performance
       description: >
         Returns per-hiring-manager job counts (total, active, closed) and a success rate
         (closed / total). "Closed" includes job openings with status "closed" or "hired";
         everything else counts as active. Result is cached per tenant. Requires super-user
         privileges.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Recruitment Analytics]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Hiring manager performance retrieved
@@ -633,17 +800,28 @@ paths:
           description: Subscription expired
         "403":
           description: Forbidden — requires super-user privileges
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-salary-distribution-by-department:
     get:
+      operationId: getSalaryDistributionByDepartment
       summary: Salary distribution by department
       description: >
         Returns min/max/average gross salary and employee count per department, based on
         each employee's latest SalaryStructure row (most recent year/month). Result is
         cached per tenant. Requires super-user privileges.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Compensation Analytics]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Salary distribution by department retrieved
@@ -670,17 +848,28 @@ paths:
           description: Subscription expired
         "403":
           description: Forbidden — requires super-user privileges
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-compensation-breakdown:
     get:
+      operationId: getCompensationBreakdown
       summary: Compensation breakdown
       description: >
         Returns organization-wide average salary component values (basic pay, HRA,
         conveyance, PF, ESI, PT), based on each employee's latest SalaryStructure row.
         Result is cached per tenant. Requires super-user privileges.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Compensation Analytics]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Compensation breakdown retrieved
@@ -707,17 +896,28 @@ paths:
           description: Subscription expired
         "403":
           description: Forbidden — requires super-user privileges
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-average-salary-by-designation:
     get:
+      operationId: getAverageSalaryByDesignation
       summary: Average salary by designation
       description: >
         Returns average/min/max gross salary and employee count per designation, sorted
         descending by average salary, based on each employee's latest SalaryStructure
         row. Result is cached per tenant. Requires super-user privileges.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Compensation Analytics]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Average salary by designation retrieved
@@ -745,18 +945,29 @@ paths:
           description: Subscription expired
         "403":
           description: Forbidden — requires super-user privileges
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-salary-bands:
     get:
+      operationId: getSalaryBands
       summary: Salary bands
       description: >
         Buckets each employee's latest gross salary into bands (<20K, 20-40K, 40-60K,
         60-100K, 100K+) via a MongoDB `$bucket` aggregation, returning count and average
         salary per band. Requires a tenant context — fails with 500 if none is present.
         Result is cached per tenant. Requires super-user privileges.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Compensation Analytics]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Salary bands retrieved
@@ -788,3 +999,7 @@ paths:
           description: Forbidden — requires super-user privileges
         "500":
           description: Internal Server Error — no tenant context on request
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"

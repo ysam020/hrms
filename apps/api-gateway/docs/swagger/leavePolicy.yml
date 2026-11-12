@@ -1,15 +1,20 @@
 paths:
   /api/v1/leave-policy:
     get:
+      operationId: getLeavePolicy
       summary: Get the tenant's leave policy
       description: >-
         Returns just the per-leave-type policy list (leavePolicies) from the
         tenant's active TenantSettings — not the full organisation settings
         form. Empty array when the tenant has never configured per-type
         policies (falls back to the legacy flat quota fields elsewhere).
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Leave Policy]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Leave policy retrieved
@@ -30,17 +35,35 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
     put:
+      operationId: updateLeavePolicy
       summary: Update the tenant's leave policy
       description: >-
         Owners/admins/superusers only. Writes a new versioned TenantSettings
         row patching just leavePolicies, so this doesn't require resubmitting
-        Attendance/HR fields it never touched. effectiveFrom defaults to now;
-        when set in the future, the new policy list only takes effect from
-        that date, keeping the previous version active until then.
+        Attendance/HR fields it never touched. The new version always takes
+        effect immediately: although the handler reads effectiveFrom and
+        note, validate(updateLeavePolicySchema) strips every field except
+        leavePolicies before the handler runs, so both are currently ignored
+        (see SWAGGER_AUDIT_REPORT.md, section G).
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Leave Policy]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -57,9 +80,14 @@ paths:
                 effectiveFrom:
                   type: string
                   format: date-time
-                  description: Defaults to now if omitted.
+                  deprecated: true
+                  description: >-
+                    Currently ignored — stripped by request validation; the
+                    policy takes effect immediately.
                 note:
                   type: string
+                  deprecated: true
+                  description: Currently ignored — stripped by request validation.
                   example: "Added compassionate leave policy for FY26"
       responses:
         "200":
@@ -84,9 +112,18 @@ paths:
           description: Unauthorized
         "403":
           description: Forbidden — only owners and admins can update leave policy, or no active tenant
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/comp-off-credits:
     get:
+      operationId: listCompOffCredits
       summary: List comp-off credits
       description: >-
         Returns a user's comp-off credit ledger (earned via manual HR credit
@@ -95,9 +132,13 @@ paths:
         "expired" on read, keeping balances accurate without a separate cron.
         Owners/admins/HR/superusers may pass userId to view any employee's
         credits; everyone else always sees only their own.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Leave Policy]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: userId
           in: query
@@ -120,7 +161,16 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
     post:
+      operationId: createCompOffCredit
       summary: Manually credit comp-off
       description: >-
         Owners/admins/HR/superusers only. Credits an employee for a worked
@@ -128,9 +178,16 @@ paths:
         tenant's comp-off leave policy (the leavePolicies entry flagged
         isCompOff) as sourceDate + compOffExpiryDays; if no such policy is
         configured, the credit never expires.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Leave Policy]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -172,6 +229,16 @@ paths:
           description: Unauthorized
         "403":
           description: Forbidden — only owners, admins, and HR can credit comp-off, or no active tenant
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
 components:
   schemas:

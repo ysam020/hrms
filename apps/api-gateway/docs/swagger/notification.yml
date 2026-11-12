@@ -1,14 +1,19 @@
 paths:
   /api/v1/get-notifications:
     get:
+      operationId: getNotifications
       summary: Get notifications
       description: >
         Returns a paginated list of notifications for the authenticated user,
         along with the total count and current unread count. Pass
         `unreadOnly=true` to only return notifications not yet cleared.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Notification]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: unreadOnly
           in: query
@@ -53,23 +58,40 @@ paths:
                   unreadCount: { type: integer, example: 5 }
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/clear-notification/{_id}:
     put:
+      operationId: clearNotification
       summary: Clear a single notification
       description: >
         Marks one notification as read/cleared for the authenticated user.
         The `_id` path parameter is the notification `id` returned by
         GET /get-notifications.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Notification]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: _id
           in: path
           required: true
           schema: { type: string }
           example: "6672a2501aa931b68b091faf"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Notification cleared
@@ -83,14 +105,33 @@ paths:
                     { type: string, example: "Notification(s) marked as read" }
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/clear-all-notifications:
     put:
+      operationId: clearAllNotifications
       summary: Clear all notifications
-      description: Marks every uncleared notification for the authenticated user as read/cleared.
+      description: >-
+        Marks every uncleared notification for the authenticated user as read/cleared.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Notification]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: All notifications cleared
@@ -107,3 +148,13 @@ paths:
                     }
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"

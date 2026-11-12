@@ -1,6 +1,7 @@
 paths:
   /api/v1/notice-period-policies:
     get:
+      operationId: listNoticePeriodPolicies
       summary: List notice period policies
       description: >-
         Returns the tenant's configured notice period policy rows (rules
@@ -10,9 +11,13 @@ paths:
         Actual resolution of which policy applies to a given resignation
         happens in recruitment-service, not here; this endpoint only
         manages the configuration rows. Requires an active tenant.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Notice Period Policies]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Notice period policies retrieved
@@ -41,16 +46,32 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant on the session
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
     post:
+      operationId: createNoticePeriodPolicy
       summary: Create a notice period policy
       description: >-
         Adds a new notice period policy rule for the tenant. Restricted to
         owners, admins, HR, or a user with
         `Organisation:edit_organisation_settings`. `createdBy` is set from
         the authenticated user.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Notice Period Policies]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -86,22 +107,39 @@ paths:
           description: >-
             No active tenant, or caller is not an owner/admin/HR/permitted
             user
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/notice-period-policies/{id}:
     put:
+      operationId: updateNoticePeriodPolicy
       summary: Update a notice period policy
       description: >-
         Partial update of an existing policy rule (all fields optional).
         Restricted to owners, admins, HR, or a user with
         `Organisation:edit_organisation_settings`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Notice Period Policies]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -136,20 +174,37 @@ paths:
             user
         "404":
           description: Policy not found in this tenant
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
     delete:
+      operationId: deleteNoticePeriodPolicy
       summary: Delete a notice period policy
       description: >-
         Hard-deletes the policy row (unlike the exit checklist item defs,
         there is no soft-delete/deactivate here). Restricted to owners,
         admins, HR, or a user with `Organisation:edit_organisation_settings`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Notice Period Policies]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Notice period policy deleted
@@ -168,3 +223,11 @@ paths:
             user
         "404":
           description: Policy not found in this tenant
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"

@@ -1,6 +1,7 @@
 paths:
   /api/v1/salary-component-definitions:
     get:
+      operationId: listSalaryComponents
       summary: List salary component definitions
       description: >-
         Returns the tenant's active salary component definitions
@@ -9,9 +10,13 @@ paths:
         default components (Basic Pay, HRA, Conveyance Allowance, Provident
         Fund, ESI, Professional Tax) idempotently so payroll calculations have
         something to reference even before HR configures anything.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Payroll Components]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Salary component definitions retrieved
@@ -44,8 +49,17 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant on the caller's session
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
     post:
+      operationId: createSalaryComponent
       summary: Create a salary component definition
       description: >-
         Adds a new tenant-configurable earning/deduction component (beyond
@@ -53,9 +67,16 @@ paths:
         salary structure. `code` is upper-cased on save. Restricted to
         owner/admin/superuser or a holder of the
         Organisation:edit_organisation_settings permission.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Payroll Components]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -95,23 +116,40 @@ paths:
             Forbidden — only owners/admins (or
             Organisation:edit_organisation_settings holders) can configure
             salary components
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/salary-component-definitions/{id}:
     put:
+      operationId: updateSalaryComponent
       summary: Update a salary component definition
       description: >-
         Partially updates a component's fields, or its isActive flag.
         Statutory components (PF/ESI/PT) cannot be deactivated via this
         endpoint. Restricted to owner/admin/superuser or a holder of the
         Organisation:edit_organisation_settings permission.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Payroll Components]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -153,8 +191,17 @@ paths:
             salary components
         "404":
           description: Component not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
     delete:
+      operationId: deleteSalaryComponent
       summary: Remove a salary component definition
       description: >-
         Soft-deletes a component (sets isActive to false) — never hard
@@ -162,14 +209,20 @@ paths:
         readable. Statutory components (PF/ESI/PT) cannot be removed.
         Restricted to owner/admin/superuser or a holder of the
         Organisation:edit_organisation_settings permission.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Payroll Components]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Component removed
@@ -191,17 +244,30 @@ paths:
             salary components
         "404":
           description: Component not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/pt-slabs:
     get:
+      operationId: listPtSlabs
       summary: List Professional Tax slabs
       description: >-
         Returns the tenant's state-wise Professional Tax slabs, ordered by
         state then minGross. Used by payroll runs to compute PT instead of
         the flat approximate default when the tenant has configured them.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Payroll Components]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: PT slabs retrieved
@@ -225,15 +291,31 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant on the caller's session
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
     post:
+      operationId: createPtSlab
       summary: Create a Professional Tax slab
       description: >-
         Adds a state-wise PT slab. Restricted to owner/admin/superuser or a
         holder of the Organisation:edit_organisation_settings permission.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Payroll Components]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -264,22 +346,39 @@ paths:
             Forbidden — only owners/admins (or
             Organisation:edit_organisation_settings holders) can configure
             Professional Tax slabs
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/pt-slabs/{id}:
     put:
+      operationId: updatePtSlab
       summary: Update a Professional Tax slab
       description: >-
         Partially updates a PT slab's fields. Restricted to owner/admin/
         superuser or a holder of the Organisation:edit_organisation_settings
         permission.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Payroll Components]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -311,20 +410,37 @@ paths:
             Professional Tax slabs
         "404":
           description: Slab not found
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
     delete:
+      operationId: deletePtSlab
       summary: Remove a Professional Tax slab
       description: >-
         Hard-deletes a PT slab. Restricted to owner/admin/superuser or a
         holder of the Organisation:edit_organisation_settings permission.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Payroll Components]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Slab removed
@@ -344,18 +460,31 @@ paths:
             Professional Tax slabs
         "404":
           description: Slab not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/tds-slabs:
     get:
+      operationId: listIncomeTaxSlabs
       summary: List Income Tax (TDS) slabs
       description: >-
         Returns the tenant's income-tax slabs across financial years and
         regimes (old/new), ordered by financial year desc, regime, then
         minIncome. Used by payroll runs, the TDS worksheet, and Form 16 to
         compute monthly/annual tax.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Payroll Components]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Income Tax slabs retrieved
@@ -380,16 +509,32 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant on the caller's session
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
     post:
+      operationId: createIncomeTaxSlab
       summary: Create an Income Tax (TDS) slab
       description: >-
         Adds a slab row for a given financial year/regime/income band.
         Restricted to owner/admin/superuser or a holder of the
         Organisation:edit_organisation_settings permission.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Payroll Components]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -423,22 +568,39 @@ paths:
             Forbidden — only owners/admins (or
             Organisation:edit_organisation_settings holders) can configure
             Income Tax slabs
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/tds-slabs/{id}:
     put:
+      operationId: updateIncomeTaxSlab
       summary: Update an Income Tax (TDS) slab
       description: >-
         Partially updates a TDS slab's fields. Restricted to owner/admin/
         superuser or a holder of the Organisation:edit_organisation_settings
         permission.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Payroll Components]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -471,20 +633,37 @@ paths:
             Income Tax slabs
         "404":
           description: Slab not found
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
     delete:
+      operationId: deleteIncomeTaxSlab
       summary: Remove an Income Tax (TDS) slab
       description: >-
         Hard-deletes a TDS slab. Restricted to owner/admin/superuser or a
         holder of the Organisation:edit_organisation_settings permission.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Payroll Components]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Slab removed
@@ -504,16 +683,29 @@ paths:
             Income Tax slabs
         "404":
           description: Slab not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/pay-cycles:
     get:
+      operationId: listPayCycles
       summary: List pay cycles
       description: >-
         Returns the tenant's active pay cycles, default cycle first. Payroll
         runs are stamped with the resolved pay cycle at initiation time.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Payroll Components]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Pay cycles retrieved
@@ -540,8 +732,17 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant on the caller's session
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
     post:
+      operationId: createPayCycle
       summary: Create a pay cycle
       description: >-
         Adds a new pay cycle. Setting isDefault clears the flag on every
@@ -550,9 +751,16 @@ paths:
         regardless of a non-monthly cycle's frequency (see the payroll run
         initiation endpoint). Restricted to owner/admin/superuser or a holder
         of the Organisation:edit_organisation_settings permission.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Payroll Components]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -586,23 +794,40 @@ paths:
             Forbidden — only owners/admins (or
             Organisation:edit_organisation_settings holders) can configure
             pay cycles
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/pay-cycles/{id}:
     put:
+      operationId: updatePayCycle
       summary: Update a pay cycle
       description: >-
         Partially updates a pay cycle's fields, or its isActive flag. Setting
         isDefault to true clears the flag on every other cycle for the
         tenant. Restricted to owner/admin/superuser or a holder of the
         Organisation:edit_organisation_settings permission.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Payroll Components]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -637,21 +862,38 @@ paths:
             pay cycles
         "404":
           description: Pay cycle not found
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
     delete:
+      operationId: deletePayCycle
       summary: Remove a pay cycle
       description: >-
         Soft-deletes a pay cycle (sets isActive and isDefault to false).
         Restricted to owner/admin/superuser or a holder of the
         Organisation:edit_organisation_settings permission.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Payroll Components]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Pay cycle removed
@@ -671,3 +913,11 @@ paths:
             pay cycles
         "404":
           description: Pay cycle not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"

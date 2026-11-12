@@ -1,0 +1,111 @@
+# App-level routes registered directly in src/server.ts.
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Liveness / degradation check
+      description: >-
+        Always 200 while the process serves requests. status is "degraded"
+        when rate limiting has fallen back to per-process memory or the
+        account-access circuit breaker is open. No authentication; not under
+        /api/v1.
+      tags: [System]
+      security: []
+      responses:
+        "200":
+          description: Health
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [healthy, degraded] }
+                  rateLimitStore: { type: string, enum: [redis, memory] }
+                  accountAccessBreakerOpen: { type: boolean }
+                  accountAccessCachedDecisions: { type: integer }
+                  rateLimitDegradedSince:
+                    type: string
+                    format: date-time
+                    description: Only while degraded.
+              example:
+                status: healthy
+                rateLimitStore: redis
+                accountAccessBreakerOpen: false
+                accountAccessCachedDecisions: 42
+
+  /api/v1/integrations/razorpayx/webhook:
+    post:
+      operationId: razorpayXPayoutWebhook
+      summary: RazorpayX payout webhook (server-to-server)
+      description: >-
+        Not bearer-authenticated and exempt from CSRF (mounted before the CSRF
+        middleware with express.raw so the signed bytes are preserved).
+        Authenticity: HMAC-SHA256 of the raw body with
+        RAZORPAY_X_WEBHOOK_SECRET, compared in constant time with
+        X-Razorpay-Signature. Deliveries are de-duplicated on
+        X-Razorpay-Event-Id. payout.processed, payout.failed, payout.reversed
+        and payout.cancelled update the matching payroll line item's
+        payoutStatus; other events, or payouts with no matching line item,
+        are acknowledged and ignored.
+      tags: [Payroll]
+      security: []
+      parameters:
+        - name: X-Razorpay-Signature
+          in: header
+          required: true
+          schema: { type: string }
+        - name: X-Razorpay-Event-Id
+          in: header
+          required: false
+          description: Used to de-duplicate deliveries.
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: RazorpayX webhook payload (verified and parsed from the raw bytes).
+            example:
+              event: "payout.processed"
+              payload:
+                {
+                  payout:
+                    {
+                      entity: { id: "pout_EXAMPLE00001", status: "processed" },
+                    },
+                }
+      responses:
+        "200":
+          description: Acknowledged (also for duplicates and ignored events)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+        "400":
+          description: Missing/invalid signature or invalid JSON
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: false }
+                  message: { type: string }
+        "500":
+          description: Webhook secret not configured, or processing failed (Razorpay retries)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: false }
+        "503":
+          description: De-duplication store unavailable; Razorpay retries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: false }

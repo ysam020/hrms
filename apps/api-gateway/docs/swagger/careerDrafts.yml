@@ -1,0 +1,466 @@
+# Careers page application drafts (anonymous).
+# Routes: src/routes/recruitment.ts publicRecruitmentRouter; handlers/careerDrafts.ts;
+# services/careerApplications.ts, services/recruitmentForms.ts.
+# Tenant is resolved from :slug by resolvePublicTenant (unknown slug -> 404).
+# A draft is reachable only with the bearer token returned when it was created
+# (or recovered by email code), sent in the X-Draft-Token header. A wrong token
+# is reported exactly like a missing draft (404) so ids can't be probed.
+# Drafts expire 30 days after the last save.
+components:
+  parameters:
+    CareerSlug:
+      name: slug
+      in: path
+      required: true
+      description: The organisation's careers-page slug.
+      schema: { type: string, example: "acme" }
+    CareerJobId:
+      name: jobId
+      in: path
+      required: true
+      schema: { type: string, pattern: "^[a-f0-9]{24}$" }
+    CareerDraftId:
+      name: draftId
+      in: path
+      required: true
+      schema: { type: string, pattern: "^[a-f0-9]{24}$" }
+    DraftToken:
+      name: X-Draft-Token
+      in: header
+      required: true
+      description: Token returned by create or recover/verify (at most 200 characters).
+      schema: { type: string, maxLength: 200 }
+
+  schemas:
+    CareerApplicationData:
+      type: object
+      description: >-
+        The application form state (sanitizeApplicationData). Unknown keys are
+        dropped and strings truncated. Which profile fields are required,
+        optional or hidden, whether a résumé/cover letter is required, and the
+        screening questions are configured per job opening.
+      properties:
+        name: { type: string, maxLength: 100, example: "Arjun Mehta" }
+        email: { type: string, maxLength: 254, example: "arjun@example.com" }
+        mobile:
+          type: string
+          maxLength: 20
+          description: 10-digit Indian number or +<country code><number>.
+          example: "+919876543210"
+        resume:
+          type: string
+          maxLength: 1000
+          description: fileUrl from POST /public/careers/{slug}/resume-upload-url; must be an object this service issued.
+        resumeName:
+          { type: string, maxLength: 200, example: "arjun-mehta-cv.pdf" }
+        profile:
+          type: object
+          description: >-
+            Optional/required per opening. Keys: currentLocation,
+            totalExperience (years), relevantExperience (years, <= total),
+            currentCompany, currentDesignation, skills, highestQualification,
+            noticePeriod (days 0-365), expectedCtc (LPA), currentCtc (LPA),
+            preferredLocation, willingToRelocate (boolean), linkedinUrl,
+            portfolioUrl, githubUrl (http/https URLs, 300 chars).
+          additionalProperties:
+            oneOf: [{ type: string }, { type: number }, { type: boolean }]
+          example:
+            { currentLocation: "Pune", totalExperience: 4, noticePeriod: 30 }
+        answers:
+          type: object
+          description: >-
+            Screening answers keyed by question id. select/yes_no values must
+            be one of the options ("yes"/"no"); multi_select is an array of
+            options (30 max); number is numeric; text 500 / long_text 5000
+            characters.
+          additionalProperties:
+            oneOf:
+              - { type: string }
+              - { type: number }
+              - { type: array, items: { type: string } }
+        coverLetter: { type: string, maxLength: 10000 }
+        consent:
+          type: boolean
+          description: Must be true to submit ("Confirm you've read the privacy notice.").
+    CareerDraftView:
+      type: object
+      properties:
+        draftId: { type: string }
+        revision: { type: integer, description: Send back on every save. }
+        updatedAt: { type: string, format: date-time }
+        emailVerified: { type: boolean }
+        status: { type: string, enum: [draft, submitting, submitted] }
+        applicationId: { type: string, nullable: true }
+        data: { $ref: "#/components/schemas/CareerApplicationData" }
+    CareerFieldErrors:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string, example: "Some answers need attention." }
+        errors:
+          type: object
+          description: Per-field messages keyed by input name (name, email, mobile, resume, a profile key, coverLetter, consent, or a question id).
+          additionalProperties: { type: string }
+          example:
+            {
+              mobile: "Enter a 10-digit mobile number, or include the country code.",
+            }
+
+paths:
+  /api/v1/public/careers/{slug}/jobs/{jobId}/drafts:
+    post:
+      operationId: createApplicationDraft
+      summary: Start a saved application
+      description: >-
+        Needs at least a valid name, email and mobile. Returns the draft and
+        its token; keep the token on this device. Refused if this email has
+        already applied for the opening or already has an unexpired draft (use
+        recovery instead).
+
+
+        Access: public — no authentication; the organisation is resolved from the `slug` path parameter (resolvePublicTenant, 404 if unknown).
+      tags: [Careers Page]
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/CareerSlug"
+        - $ref: "#/components/parameters/CareerJobId"
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [data]
+              properties:
+                data: { $ref: "#/components/schemas/CareerApplicationData" }
+            example:
+              data:
+                {
+                  name: "Arjun Mehta",
+                  email: "arjun@example.com",
+                  mobile: "9876543210",
+                }
+      responses:
+        "201":
+          description: Draft saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Draft saved" }
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/CareerDraftView"
+                      - type: object
+                        properties:
+                          token:
+                            {
+                              type: string,
+                              description: Bearer token for X-Draft-Token.,
+                            }
+        "400":
+          description: name/email/mobile invalid
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CareerFieldErrors" }
+        "404":
+          description: Unknown careers page, or the opening is no longer accepting applications
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "409":
+          description: code ALREADY_APPLIED or DRAFT_EXISTS
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/v1/public/careers/{slug}/jobs/{jobId}/drafts/recover:
+    post:
+      operationId: requestDraftRecovery
+      summary: Email a code to continue a saved application on this device
+      description: >-
+        Sends a one-time 6-digit code (valid 10 minutes) to the email if a
+        draft exists for this opening. The reply is identical either way, so
+        it can't be used to learn who has applied.
+
+
+        Access: public — no authentication; the organisation is resolved from the `slug` path parameter (resolvePublicTenant, 404 if unknown).
+      tags: [Careers Page]
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/CareerSlug"
+        - $ref: "#/components/parameters/CareerJobId"
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+            example: { email: "arjun@example.com" }
+      responses:
+        "200":
+          description: Generic acknowledgement
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessMessage" }
+              example:
+                success: true
+                message: "If there's a saved application for that email, we've sent it a code."
+        "404":
+          description: Unknown careers page
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/v1/public/careers/{slug}/jobs/{jobId}/drafts/recover/verify:
+    post:
+      operationId: verifyDraftRecovery
+      summary: Exchange an emailed code for a draft token
+      description: >-
+        A verified draft also counts as a verified email when submitted (unless the email is changed afterwards).
+
+
+        Access: public — no authentication; the organisation is resolved from the `slug` path parameter (resolvePublicTenant, 404 if unknown).
+      tags: [Careers Page]
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/CareerSlug"
+        - $ref: "#/components/parameters/CareerJobId"
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, code]
+              properties:
+                email: { type: string, format: email }
+                code: { type: string, pattern: "^\\d{6}$", example: "482913" }
+      responses:
+        "200":
+          description: Verified
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Verified" }
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/CareerDraftView"
+                      - type: object
+                        properties:
+                          token: { type: string }
+        "400":
+          description: That code isn't right or has expired
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: Unknown careers page
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/v1/public/careers/{slug}/drafts/{draftId}:
+    get:
+      operationId: getApplicationDraft
+      summary: Load a saved application
+      description: >-
+        jobOpen tells the form whether the opening still accepts applications.
+
+
+        Access: public — no authentication; the organisation is resolved from the `slug` path parameter (resolvePublicTenant, 404 if unknown).
+      tags: [Careers Page]
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/CareerSlug"
+        - $ref: "#/components/parameters/CareerDraftId"
+        - $ref: "#/components/parameters/DraftToken"
+      responses:
+        "200":
+          description: Draft
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/CareerDraftView"
+                      - type: object
+                        properties:
+                          jobOpen: { type: boolean }
+        "404":
+          description: Draft not found for this token ("This saved application wasn't found on this device.")
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+    put:
+      operationId: saveApplicationDraft
+      summary: Autosave a saved application
+      description: >-
+        Replaces the whole form state when `revision` matches the stored one,
+        then increments it. A stale revision is refused with code STALE and
+        the newer server copy in `data`, so the client can resolve it.
+
+
+        Access: public — no authentication; the organisation is resolved from the `slug` path parameter (resolvePublicTenant, 404 if unknown).
+      tags: [Careers Page]
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/CareerSlug"
+        - $ref: "#/components/parameters/CareerDraftId"
+        - $ref: "#/components/parameters/DraftToken"
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [revision, data]
+              properties:
+                revision: { type: integer }
+                data: { $ref: "#/components/schemas/CareerApplicationData" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Saved" }
+                  data: { $ref: "#/components/schemas/CareerDraftView" }
+        "404":
+          description: Draft not found, or the opening closed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "409":
+          description: code SUBMITTED (already sent) or STALE (changed on another device; newer copy in data)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ErrorResponse"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/CareerDraftView" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+    delete:
+      operationId: discardApplicationDraft
+      summary: Discard a saved application
+      description: >-
+        Access: public — no authentication; the organisation is resolved from the `slug` path parameter (resolvePublicTenant, 404 if unknown).
+      tags: [Careers Page]
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/CareerSlug"
+        - $ref: "#/components/parameters/CareerDraftId"
+        - $ref: "#/components/parameters/DraftToken"
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "200":
+          description: Discarded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessMessage" }
+              example: { success: true, message: "Discarded" }
+        "404":
+          description: Draft not found for this token
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/v1/public/careers/{slug}/drafts/{draftId}/submit:
+    post:
+      operationId: submitApplicationDraft
+      summary: Submit a saved application
+      description: >-
+        Runs the full validation for the opening and creates the application.
+        Repeating the call after success returns the same application with
+        alreadySubmitted=true.
+
+
+        Access: public — no authentication; the organisation is resolved from the `slug` path parameter (resolvePublicTenant, 404 if unknown).
+      tags: [Careers Page]
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/CareerSlug"
+        - $ref: "#/components/parameters/CareerDraftId"
+        - $ref: "#/components/parameters/DraftToken"
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "200":
+          description: Application submitted (only the id is returned)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Application submitted" }
+                  data:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      alreadySubmitted: { type: boolean }
+        "400":
+          description: Some answers need attention
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CareerFieldErrors" }
+        "404":
+          description: Draft not found, or the opening closed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "409":
+          description: code IN_PROGRESS — the application is already being sent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"

@@ -1,6 +1,7 @@
 paths:
   /api/v1/tenant-settings:
     get:
+      operationId: getTenantSettings
       summary: Get active (and pending) tenant settings
       description: >
         Returns the currently active `TenantSettings` version — the latest
@@ -9,9 +10,13 @@ paths:
         returned with `id`/`effectiveFrom`/`note` set to `null`. Any
         authenticated tenant member may read. Requires `requireTenant` +
         `requireActiveSubscription`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Tenant Settings]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Active and pending settings
@@ -39,8 +44,15 @@ paths:
           description: Subscription expired
         "403":
           description: No active tenant
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
     put:
+      operationId: updateTenantSettings
       summary: Write a new settings version
       description: >
         Merges the given partial `settings` patch onto the current active
@@ -55,9 +67,16 @@ paths:
         `owner`/`admin` roles, superusers, or callers holding
         `Organisation:edit_organisation_settings` — checked in-handler, on
         top of `requireTenant` + `requireActiveSubscription`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Tenant Settings]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -176,9 +195,16 @@ paths:
           description: >
             No active tenant, or caller is not owner/admin/superuser/
             Organisation:edit_organisation_settings holder
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/tenant-settings/pending/{id}:
     delete:
+      operationId: cancelPendingSettings
       summary: Cancel a pending settings version
       description: >
         Deletes a future-dated (`effectiveFrom > now()`) `TenantSettings`
@@ -187,9 +213,13 @@ paths:
         note this check does **not** extend to the
         `Organisation:edit_organisation_settings` permission (unlike the PUT
         above). Requires `requireTenant` + `requireActiveSubscription`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Tenant Settings]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -197,6 +227,8 @@ paths:
           schema: { type: string }
           description: ID of the pending TenantSettings row to cancel
           example: "6672a2501aa931b68b091faf"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Pending settings change cancelled
@@ -219,6 +251,12 @@ paths:
           description: No active tenant, or caller is not owner/admin/superuser
         "404":
           description: Pending settings version not found (or already active/past)
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
 components:
   schemas:

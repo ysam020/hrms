@@ -1,6 +1,7 @@
 paths:
   /api/v1/overtime-requests:
     post:
+      operationId: requestOvertime
       summary: Log or request overtime
       description: >-
         Records an overtime entry for the given date (one per user per date —
@@ -10,9 +11,16 @@ paths:
         "overtime" module. Otherwise it's auto-approved immediately (matching
         legacy behavior where overtime wasn't tracked/gated at all), useful
         for reporting purposes.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Overtime]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -53,16 +61,29 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
     get:
+      operationId: listOvertimeRequests
       summary: List overtime requests
       description: >-
         Owners/admins/HR/superusers may pass userId to view a specific
         employee's requests, or omit it to see every request for the tenant.
         Non-privileged callers always see only their own, newest date first.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Overtime]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: userId
           in: query
@@ -85,6 +106,14 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
 components:
   schemas:

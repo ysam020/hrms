@@ -1,6 +1,7 @@
 paths:
   /api/v1/exit-interview-templates:
     get:
+      operationId: getExitInterviewTemplate
       summary: Get the active exit interview template
       description: >-
         Returns the tenant's single active exit interview template (its
@@ -8,9 +9,13 @@ paths:
         `{ id: null, questions: [...] }` payload built from a built-in
         default question set (communication, manager support, culture,
         suggestions) rather than 404ing. Requires an active tenant.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Exit Policy]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Template retrieved (or default questions if unconfigured)
@@ -42,7 +47,16 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant on the session
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
     put:
+      operationId: updateExitInterviewTemplate
       summary: Update the exit interview template
       description: >-
         Replaces the active template's question set (creates it if none
@@ -50,9 +64,16 @@ paths:
         `Organisation:edit_organisation_settings` permission — enforced
         in-handler (403 with a descriptive message otherwise), not via route
         middleware.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Exit Policy]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -93,9 +114,20 @@ paths:
           description: >-
             No active tenant, or caller is not an owner/admin/HR/permitted
             user
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/resignations/{id}/exit-interview-response:
     post:
+      operationId: submitExitInterviewResponse
       summary: Submit an exit interview response
       description: >-
         Records the employee's answers to the exit interview for a specific
@@ -106,15 +138,21 @@ paths:
         question set on first use. Re-submitting updates the existing
         response rather than creating a duplicate. Invalidates cached
         resignation data for the tenant.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Exit Policy]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           description: Resignation id
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -152,18 +190,33 @@ paths:
             privileged
         "404":
           description: Resignation not found
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/exit-checklist-item-defs:
     get:
+      operationId: listExitChecklistDefs
       summary: List exit checklist item definitions
       description: >-
         Returns the tenant's active exit-checklist item definitions (e.g.
         "Return laptop", "Clear IT access"), ordered by their configured
         `order`. This is tenant-level configuration, not a specific
         employee's progress.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Exit Policy]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Checklist item definitions retrieved
@@ -193,15 +246,31 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant on the session
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
     post:
+      operationId: createExitChecklistDef
       summary: Create an exit checklist item definition
       description: >-
         Adds a new tenant-level checklist item definition. Restricted to
         owners, admins, HR, or a user with
         `Organisation:edit_organisation_settings`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Exit Policy]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -232,22 +301,39 @@ paths:
           description: >-
             No active tenant, or caller is not an owner/admin/HR/permitted
             user
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/exit-checklist-item-defs/{id}:
     put:
+      operationId: updateExitChecklistDef
       summary: Update an exit checklist item definition
       description: >-
         Partial update of a checklist item definition (label, owningRole,
         isRequired, order, isActive). Restricted to owners, admins, HR, or a
         user with `Organisation:edit_organisation_settings`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Exit Policy]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -280,21 +366,38 @@ paths:
             user
         "404":
           description: Item not found in this tenant
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
     delete:
+      operationId: deleteExitChecklistDef
       summary: Remove an exit checklist item definition
       description: >-
         Deactivates the item definition (`isActive: false`) rather than
         hard-deleting it, so historical per-resignation completion records
         stay intact. Restricted to owners, admins, HR, or a user with
         `Organisation:edit_organisation_settings`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Exit Policy]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Checklist item removed
@@ -313,18 +416,31 @@ paths:
             user
         "404":
           description: Item not found in this tenant
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/resignations/{id}/checklist:
     get:
+      operationId: getResignationChecklist
       summary: Get a resignation's exit checklist status
       description: >-
         Joins the tenant's active checklist item definitions with this
         resignation's per-item completion status (defs with no recorded
         status default to `isComplete: false`). Only the resigning employee
         themself, or a privileged user, may view it.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Exit Policy]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -362,9 +478,18 @@ paths:
             privileged
         "404":
           description: Resignation not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/resignations/{id}/checklist/{itemDefId}:
     put:
+      operationId: updateResignationChecklistItem
       summary: Update a resignation checklist item's completion status
       description: >-
         Marks a single checklist item complete/incomplete for this
@@ -374,9 +499,13 @@ paths:
         owners, admins, HR, or a user with
         `Organisation:edit_organisation_settings` — the resigning employee
         cannot update their own clearance status.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Exit Policy]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -387,6 +516,8 @@ paths:
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -414,9 +545,20 @@ paths:
           description: >-
             No active tenant, or caller is not an owner/admin/HR/permitted
             user
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/resignations/{id}/renegotiate-notice:
     put:
+      operationId: renegotiateNotice
       summary: Renegotiate a resignation's last working day
       description: >-
         Updates the resignation's `lastWorkingDay` and logs the change as a
@@ -426,15 +568,21 @@ paths:
         status. Note: unlike most other exit-policy write endpoints, this one
         only requires authentication in-handler — it is not restricted to
         privileged roles.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Exit Policy]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           description: Resignation id
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -475,17 +623,30 @@ paths:
           description: No active tenant on the session
         "404":
           description: Resignation not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/resignations/{id}/notice-events:
     get:
+      operationId: listNoticeEvents
       summary: List a resignation's notice-period change history
       description: >-
         Returns the audit trail of last-working-day changes for a
         resignation, oldest first. Only the resigning employee themself, or
         a privileged user, may view it.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Exit Policy]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -521,23 +682,38 @@ paths:
             privileged
         "404":
           description: Resignation not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/resignations/{id}/rehire-eligibility:
     put:
+      operationId: setRehireEligibility
       summary: Set rehire eligibility for a resigned employee
       description: >-
         Flags whether the employee is eligible for rehire. Restricted to
         owners, admins, HR, or a user with
         `Organisation:edit_organisation_settings`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Exit Policy]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           description: Resignation id
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -567,17 +743,30 @@ paths:
             user
         "404":
           description: Resignation not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/resignations/{id}/fnf-settlement:
     get:
+      operationId: getFnfSettlement
       summary: Get a resignation's full-and-final settlement
       description: >-
         Returns the previously computed FnF settlement for this resignation,
         or `null` if none has been computed yet. Restricted to owners,
         admins, HR, or a user with `Organisation:edit_organisation_settings`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Exit Policy]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -623,7 +812,16 @@ paths:
           description: >-
             No active tenant, or caller is not an owner/admin/HR/permitted
             user
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
     post:
+      operationId: computeFnfSettlement
       summary: Compute a resignation's full-and-final settlement
       description: >-
         Computes (or recomputes, via upsert) a draft FnF settlement from the
@@ -636,15 +834,21 @@ paths:
         was waived. This is a first-pass number for HR to review — it does
         not disburse payroll. Restricted to owners, admins, HR, or a user
         with `Organisation:edit_organisation_settings`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Exit Policy]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           description: Resignation id
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Settlement computed
@@ -664,9 +868,18 @@ paths:
             user
         "404":
           description: Resignation not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/resignations/{id}/fnf-settlement/approve:
     put:
+      operationId: approveFnfSettlement
       summary: Approve a resignation's full-and-final settlement
       description: >-
         Approves a previously computed settlement (`status: "approved"`,
@@ -676,15 +889,21 @@ paths:
         where `ExitChecklistItemDef.isRequired` is actually enforced, not
         just displayed. Restricted to owners, admins, HR, or a user with
         `Organisation:edit_organisation_settings`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Exit Policy]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           description: Resignation id
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Settlement approved
@@ -706,3 +925,11 @@ paths:
             user
         "404":
           description: Settlement not found — compute one first
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"

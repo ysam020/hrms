@@ -1,6 +1,7 @@
 paths:
   /api/v1/analytics/dashboard:
     get:
+      operationId: getDashboardStats
       summary: Dashboard statistics
       description: >
         Returns aggregated top-line dashboard statistics (total employees, present today,
@@ -8,9 +9,13 @@ paths:
         given period/department. Proxies to the `GetDashboardStats` RPC on the
         analytics-service. Requires role owner, admin, or hr. Rate-limited to 500
         requests/minute per client (Redis-backed).
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); tenant role owner, admin, hr only (authorize).
       tags: [Analytics]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: period
           in: query
@@ -48,9 +53,14 @@ paths:
           description: Forbidden — requires owner, admin, or hr role
         "429":
           description: Too many requests
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/analytics/headcount:
     get:
+      operationId: getHeadcount
       summary: Headcount metrics
       description: >
         Returns headcount metrics for a department/period. Requires role owner, admin, or
@@ -60,9 +70,13 @@ paths:
         GetSalaryAnalytics, and GetEmployeeGrowth — there is no GetHeadcount method. This
         endpoint is expected to fail (UNIMPLEMENTED / 500) against the current service
         until either the proto is extended or the handler is pointed at GetEmployeeGrowth.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); tenant role owner, admin, hr only (authorize).
       tags: [Analytics]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: department
           in: query
@@ -85,17 +99,26 @@ paths:
           description: Too many requests
         "501":
           description: Not Implemented — RPC method does not exist on analytics-service
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/analytics/attendance:
     get:
+      operationId: getAttendanceAnalytics
       summary: Attendance analytics
       description: >
         Returns attendance metric series (label/value/date points) for a month, year, and
         optional department. Proxies to the `GetAttendanceAnalytics` RPC. Requires role
         owner, admin, or hr.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); tenant role owner, admin, hr only (authorize).
       tags: [Analytics]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: month
           in: query
@@ -137,16 +160,25 @@ paths:
           description: Forbidden — requires owner, admin, or hr role
         "429":
           description: Too many requests
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/analytics/leave:
     get:
+      operationId: getLeaveAnalytics
       summary: Leave analytics
       description: >
         Returns leave metric series for a month, year, department, and/or leave type.
         Proxies to the `GetLeaveAnalytics` RPC. Requires role owner, admin, or hr.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); tenant role owner, admin, hr only (authorize).
       tags: [Analytics]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: month
           in: query
@@ -192,16 +224,25 @@ paths:
           description: Forbidden — requires owner, admin, or hr role
         "429":
           description: Too many requests
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/analytics/recruitment:
     get:
+      operationId: getRecruitmentAnalytics
       summary: Recruitment analytics
       description: >
         Returns recruitment funnel metric series for a period/year. Proxies to the
         `GetRecruitmentAnalytics` RPC. Requires role owner, admin, or hr.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); tenant role owner, admin, hr only (authorize).
       tags: [Analytics]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: period
           in: query
@@ -239,16 +280,25 @@ paths:
           description: Forbidden — requires owner, admin, or hr role
         "429":
           description: Too many requests
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/analytics/salary:
     get:
+      operationId: getSalaryAnalytics
       summary: Salary analytics
       description: >
         Returns salary metric series for a month, year, and/or department. Proxies to the
         `GetSalaryAnalytics` RPC. Requires role owner, admin, or hr.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); tenant role owner, admin, hr only (authorize).
       tags: [Analytics]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: month
           in: query
@@ -290,9 +340,14 @@ paths:
           description: Forbidden — requires owner, admin, or hr role
         "429":
           description: Too many requests
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/analytics/turnover:
     get:
+      operationId: getTurnoverAnalytics
       summary: Turnover analytics
       description: >
         Returns turnover metrics for a year/department. Requires role owner, admin, or hr.
@@ -301,9 +356,13 @@ paths:
         GetDashboardStats, GetAttendanceAnalytics, GetLeaveAnalytics,
         GetRecruitmentAnalytics, GetSalaryAnalytics, GetEmployeeGrowth exist). This
         endpoint is expected to fail (UNIMPLEMENTED / 500) against the current service.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); tenant role owner, admin, hr only (authorize).
       tags: [Analytics]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: year
           in: query
@@ -326,9 +385,14 @@ paths:
           description: Too many requests
         "501":
           description: Not Implemented — RPC method does not exist on analytics-service
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/analytics/performance:
     get:
+      operationId: getPerformanceAnalytics
       summary: Performance analytics
       description: >
         Returns performance-review metrics for a period/department. Requires role owner,
@@ -337,9 +401,13 @@ paths:
         GetDashboardStats, GetAttendanceAnalytics, GetLeaveAnalytics,
         GetRecruitmentAnalytics, GetSalaryAnalytics, GetEmployeeGrowth exist). This
         endpoint is expected to fail (UNIMPLEMENTED / 500) against the current service.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); tenant role owner, admin, hr only (authorize).
       tags: [Analytics]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: period
           in: query
@@ -362,3 +430,7 @@ paths:
           description: Too many requests
         "501":
           description: Not Implemented — RPC method does not exist on analytics-service
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"

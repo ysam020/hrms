@@ -1,6 +1,7 @@
 paths:
   /api/v1/onboarding-checklist:
     get:
+      operationId: getOnboardingChecklist
       summary: Get the tenant's setup checklist state
       description: >-
         Returns which onboarding/setup checklist steps (e.g. add employees,
@@ -8,9 +9,13 @@ paths:
         skipped. Open to any authenticated user with an active tenant; there
         is one shared checklist state per tenant, not per user. Returns an
         empty itemStatus map if the tenant hasn't touched the checklist yet.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Onboarding]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Checklist state fetched
@@ -35,24 +40,39 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant on the request
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/onboarding-checklist/{stepKey}:
     put:
+      operationId: updateOnboardingChecklistItem
       summary: Mark a setup checklist step completed or skipped
       description: >-
         Updates the status of a single checklist step for the tenant.
         Restricted to owners/admins/superusers ("Only owners and admins can
         update the setup checklist."). Upserts the tenant's checklist state
         row, merging the new step status into the existing itemStatus map.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Onboarding]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: stepKey
           in: path
           required: true
           schema: { type: string }
           example: "add_employees"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -87,3 +107,13 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant, or caller is not owner/admin/superuser
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"

@@ -1,13 +1,18 @@
 paths:
   /api/v1/departments:
     get:
+      operationId: listDepartments
       summary: List departments
       description: >-
         Returns all active departments for the tenant, sorted by name. Open
         to any authenticated user with an active tenant.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Org Structure]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Departments fetched
@@ -31,14 +36,30 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
     post:
+      operationId: createDepartment
       summary: Create a department
       description: >-
         Creates a new department for the tenant. Requires HR/owner/admin/
         superuser ("Only owners, admins, and HR can manage departments.").
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Org Structure]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -70,21 +91,38 @@ paths:
           description: Unauthorized
         "403":
           description: Caller is not HR/owner/admin/superuser, or no active tenant
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/departments/{id}:
     put:
+      operationId: updateDepartment
       summary: Update a department
       description: >-
         Updates name, headUserId, and/or isActive for a department scoped to
         the caller's tenant. Requires HR/owner/admin/superuser.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Org Structure]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -112,19 +150,36 @@ paths:
           description: Caller is not HR/owner/admin/superuser, or no active tenant
         "404":
           description: Department not found
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
     delete:
+      operationId: deleteDepartment
       summary: Deactivate a department
       description: >-
         Soft-deletes a department by setting isActive to false (no hard
         delete). Requires HR/owner/admin/superuser.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Org Structure]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Department removed
@@ -141,16 +196,29 @@ paths:
           description: Caller is not HR/owner/admin/superuser, or no active tenant
         "404":
           description: Department not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/designations:
     get:
+      operationId: listDesignations
       summary: List designations
       description: >-
         Returns all active designations for the tenant, sorted by name. Open
         to any authenticated user with an active tenant.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Org Structure]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Designations fetched
@@ -175,15 +243,31 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
     post:
+      operationId: createDesignation
       summary: Create a designation
       description: >-
         Creates a new designation for the tenant, optionally scoped to a
         department and/or given a seniority level. Requires HR/owner/admin/
         superuser ("Only owners, admins, and HR can manage designations.").
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Org Structure]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -218,21 +302,38 @@ paths:
           description: Unauthorized
         "403":
           description: Caller is not HR/owner/admin/superuser, or no active tenant
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/designations/{id}:
     put:
+      operationId: updateDesignation
       summary: Update a designation
       description: >-
         Updates name, departmentId, level, and/or isActive for a designation
         scoped to the caller's tenant. Requires HR/owner/admin/superuser.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Org Structure]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -261,19 +362,36 @@ paths:
           description: Caller is not HR/owner/admin/superuser, or no active tenant
         "404":
           description: Designation not found
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
     delete:
+      operationId: deleteDesignation
       summary: Deactivate a designation
       description: >-
         Soft-deletes a designation by setting isActive to false (no hard
         delete). Requires HR/owner/admin/superuser.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Org Structure]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Designation removed
@@ -290,9 +408,18 @@ paths:
           description: Caller is not HR/owner/admin/superuser, or no active tenant
         "404":
           description: Designation not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/org-structure/migrate-from-free-text:
     post:
+      operationId: migrateFromFreeText
       summary: Migrate free-text department/designation strings to structured records
       description: >-
         One-time, idempotent, per-tenant migration. Collects every distinct
@@ -302,9 +429,16 @@ paths:
         name match. Never runs automatically — tenants that don't call this
         keep operating purely off the legacy free-text fields. Requires
         HR/owner/admin/superuser.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Org Structure]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Migration completed
@@ -329,3 +463,11 @@ paths:
           description: Unauthorized
         "403":
           description: Caller is not HR/owner/admin/superuser, or no active tenant
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"

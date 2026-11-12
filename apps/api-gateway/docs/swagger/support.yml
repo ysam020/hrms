@@ -1,0 +1,1488 @@
+# Support tickets from an organisation to the Praesto team.
+#   /api/v1/support/*           src/routes/support.ts supportRouter, handlers/support.ts
+#     mount: authenticate + requireTenant + idempotency (NO subscription check:
+#     a lapsed organisation must still be able to raise a billing issue).
+#   /api/v1/platform/support/*  platformSupportRouter, handlers/platformSupport.ts
+#     mount: authenticate + requireSupportAgent + idempotency (Praesto's own
+#     organisation: owner/admin/superuser or PraestoSupport:handle_tickets).
+# Handler errors (SupportError) are returned as { success: false, message }.
+components:
+  parameters:
+    SupportTicketId:
+      name: ticketId
+      in: path
+      required: true
+      description: Ticket id (24-hex ObjectId). A malformed id is reported as 404.
+      schema: { type: string, pattern: "^[a-f0-9]{24}$" }
+    SupportAttachmentId:
+      name: attachmentId
+      in: path
+      required: true
+      schema: { type: string, pattern: "^[a-f0-9]{24}$" }
+    SupportStatusFilter:
+      name: status
+      in: query
+      description: Comma-separated statuses; "active" expands to open,in_progress,waiting_for_tenant.
+      schema: { type: string, example: "active,resolved" }
+    SupportCategoryFilter:
+      name: category
+      in: query
+      description: Comma-separated categories.
+      schema: { type: string, example: "billing,bug_report" }
+    SupportPriorityFilter:
+      name: priority
+      in: query
+      description: Comma-separated priorities (low, normal, high, urgent).
+      schema: { type: string }
+    SupportSort:
+      name: sort
+      in: query
+      schema:
+        type: string
+        enum: [updated_desc, updated_asc, created_desc, created_asc]
+        default: updated_desc
+    SupportSearch:
+      name: search
+      in: query
+      description: Matches ticket number or subject (trimmed to 100 characters).
+      schema: { type: string, maxLength: 100 }
+
+  schemas:
+    SupportCategory:
+      type: string
+      enum:
+        [
+          bug_report,
+          technical_issue,
+          billing,
+          feature_request,
+          improvement,
+          general,
+          security,
+        ]
+    SupportStatus:
+      type: string
+      enum: [open, in_progress, waiting_for_tenant, resolved, closed]
+    SupportPriority:
+      type: string
+      enum: [low, normal, high, urgent]
+    SupportTicket:
+      type: object
+      description: Tenant-facing ticket view (supportPolicy.tenantTicketView).
+      properties:
+        id: { type: string }
+        ticketNo: { type: string, example: "PRA-2026-000123" }
+        subject: { type: string, example: "Payslip PDF fails to download" }
+        description: { type: string }
+        category: { $ref: "#/components/schemas/SupportCategory" }
+        module: { type: string, nullable: true, example: "Payroll" }
+        details:
+          type: object
+          nullable: true
+          additionalProperties: { type: string }
+        requestedPriority: { $ref: "#/components/schemas/SupportPriority" }
+        priority:
+          allOf: [{ $ref: "#/components/schemas/SupportPriority" }]
+          description: Effective priority; a requested "urgent" is stored as "high" until triaged.
+        status: { $ref: "#/components/schemas/SupportStatus" }
+        reporterId: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        resolvedAt: { type: string, format: date-time, nullable: true }
+        closedAt: { type: string, format: date-time, nullable: true }
+        reopenCount: { type: integer }
+    StaffSupportTicket:
+      type: object
+      description: Praesto-staff ticket view (platformSupport.staffTicketView).
+      properties:
+        id: { type: string }
+        ticketNo: { type: string, example: "PRA-2026-000123" }
+        tenantId: { type: string }
+        reporterId: { type: string }
+        subject: { type: string }
+        description: { type: string }
+        category: { $ref: "#/components/schemas/SupportCategory" }
+        module: { type: string, nullable: true }
+        details:
+          {
+            type: object,
+            nullable: true,
+            additionalProperties: { type: string },
+          }
+        requestedPriority: { $ref: "#/components/schemas/SupportPriority" }
+        priority: { $ref: "#/components/schemas/SupportPriority" }
+        status: { $ref: "#/components/schemas/SupportStatus" }
+        assigneeId: { type: string, nullable: true }
+        duplicateOfId: { type: string, nullable: true }
+        version:
+          type: integer
+          description: Optimistic-concurrency version; send it back on every staff write.
+        firstResponseAt: { type: string, format: date-time, nullable: true }
+        resolvedAt: { type: string, format: date-time, nullable: true }
+        closedAt: { type: string, format: date-time, nullable: true }
+        reopenCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    SupportAttachment:
+      type: object
+      properties:
+        id: { type: string }
+        messageId: { type: string, nullable: true }
+        fileName: { type: string, example: "error-screenshot.png" }
+        contentType: { type: string, example: "image/png" }
+        size: { type: integer, example: 48213 }
+        visibility: { type: string, enum: [public, internal] }
+        createdAt: { type: string, format: date-time }
+    SupportPerson:
+      type: object
+      nullable: true
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string, format: email }
+    SupportUploadRequest:
+      type: object
+      additionalProperties: false
+      required: [fileName, contentType, size]
+      properties:
+        fileName:
+          {
+            type: string,
+            minLength: 1,
+            maxLength: 200,
+            example: "error-screenshot.png",
+          }
+        contentType:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: One of image/png, image/jpeg, image/gif, image/webp, application/pdf, text/plain, text/csv; the extension must match.
+          example: "image/png"
+        size:
+          {
+            type: integer,
+            minimum: 0,
+            maximum: 10485760,
+            description: Bytes; at most 10 MB.,
+          }
+    SupportUploadIssued:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string, example: "Upload URL issued" }
+        data:
+          type: object
+          properties:
+            attachmentId: { type: string }
+            uploadUrl:
+              type: string
+              format: uri
+              description: S3 presigned PUT URL valid for 5 minutes; send the declared Content-Type and exact size.
+    SupportUploadVerified:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string, example: "Upload verified" }
+        data:
+          type: object
+          properties:
+            id: { type: string }
+            fileName: { type: string }
+            contentType:
+              {
+                type: string,
+                description: Type verified from the file's own bytes.,
+              }
+            size: { type: integer }
+    SupportDownloadLink:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string, example: "Download link" }
+        data:
+          type: object
+          properties:
+            url:
+              {
+                type: string,
+                format: uri,
+                description: Presigned GET URL valid for 5 minutes.,
+              }
+
+paths:
+  # ── Tenant side ────────────────────────────────────────────────────────────
+  /api/v1/support/context:
+    get:
+      operationId: getSupportContext
+      summary: What the caller may do in Support
+      description: >-
+        canRaise = owner/admin/hr, superuser or Support:raise_tickets;
+        canViewOrg = owner/admin, superuser or Support:view_org_tickets;
+        canViewSecurity = owner, superuser or Support:view_security_tickets.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); no subscription check.
+      tags: [Support]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Capabilities
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Support context" }
+                  data:
+                    type: object
+                    properties:
+                      canRaise: { type: boolean }
+                      canViewOrg: { type: boolean }
+                      canViewSecurity: { type: boolean }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/support/stats:
+    get:
+      operationId: getSupportStats
+      summary: Ticket counts for the Support page
+      description: >-
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); no subscription check.
+      tags: [Support]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: scope
+          in: query
+          description: '"org" = every ticket the caller may see in the organisation (needs canViewOrg); anything else = own tickets.'
+          schema: { type: string, enum: [mine, org], default: mine }
+      responses:
+        "200":
+          description: Counts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Support stats" }
+                  data:
+                    type: object
+                    properties:
+                      total: { type: integer }
+                      open: { type: integer, description: open + in_progress }
+                      awaitingYou:
+                        { type: integer, description: waiting_for_tenant }
+                      resolved:
+                        { type: integer, description: resolved + closed }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/support/tickets:
+    get:
+      operationId: listSupportTickets
+      summary: List the organisation's support tickets
+      description: >-
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); no subscription check.
+      tags: [Support]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: scope
+          in: query
+          schema: { type: string, enum: [mine, org], default: mine }
+        - $ref: "#/components/parameters/SupportStatusFilter"
+        - $ref: "#/components/parameters/SupportCategoryFilter"
+        - $ref: "#/components/parameters/SupportPriorityFilter"
+        - $ref: "#/components/parameters/SupportSort"
+        - $ref: "#/components/parameters/SupportSearch"
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/LimitParam"
+      responses:
+        "200":
+          description: One page of tickets
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Support tickets" }
+                  data:
+                    type: object
+                    properties:
+                      tickets:
+                        type: array
+                        items:
+                          allOf:
+                            - $ref: "#/components/schemas/SupportTicket"
+                            - type: object
+                              properties:
+                                reporterName:
+                                  { type: string, example: "Asha Rao" }
+                                isMine: { type: boolean }
+                      total: { type: integer }
+                      page: { type: integer }
+                      limit: { type: integer }
+        "400":
+          description: Invalid status/category/priority filter or sort
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+    post:
+      operationId: createSupportTicket
+      summary: Raise a support ticket
+      description: >-
+        Needs canRaise. Only the detail keys defined for the category are kept
+        (bug_report/technical_issue: stepsToReproduce, expectedBehavior,
+        actualBehavior, errorMessage, browser; billing: invoiceReference;
+        feature_request/improvement: problem, proposedSolution,
+        expectedBenefit). attachmentIds must be verified uploads of the
+        caller (POST /support/attachments then /complete). Submitting the
+        same subject and description again within 2 minutes returns the
+        existing ticket with 200 and duplicate=true instead of creating one.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); no subscription check.
+      tags: [Support]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [category, subject, description]
+              properties:
+                category: { $ref: "#/components/schemas/SupportCategory" }
+                subject: { type: string, minLength: 5, maxLength: 160 }
+                description: { type: string, minLength: 10, maxLength: 10000 }
+                priority:
+                  allOf: [{ $ref: "#/components/schemas/SupportPriority" }]
+                  default: normal
+                module: { type: string, maxLength: 80 }
+                details:
+                  type: object
+                  additionalProperties: { type: string, maxLength: 2000 }
+                attachmentIds:
+                  type: array
+                  maxItems: 5
+                  default: []
+                  items: { type: string, pattern: "^[a-f0-9]{24}$" }
+            example:
+              category: bug_report
+              subject: "Payslip PDF fails to download"
+              description: "Clicking Download on the October payslip shows a blank tab."
+              priority: normal
+              module: "Payroll"
+              details:
+                {
+                  stepsToReproduce: "Payroll > Payslips > October > Download",
+                  browser: "Chrome 142",
+                }
+              attachmentIds: []
+      responses:
+        "201":
+          description: Ticket submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Ticket submitted" }
+                  data: { $ref: "#/components/schemas/SupportTicket" }
+        "200":
+          description: Duplicate submission within 2 minutes; the existing ticket is returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    {
+                      type: string,
+                      example: "This ticket was already submitted",
+                    }
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/SupportTicket"
+                      - type: object
+                        properties:
+                          duplicate: { type: boolean, example: true }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: The caller's role can't raise tickets
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/support/tickets/{ticketId}:
+    get:
+      operationId: getSupportTicket
+      summary: Get a support ticket with its public thread
+      description: >-
+        Visible to the reporter, participants, and holders of the matching
+        organisation-wide capability. Internal staff notes and internal
+        attachments are never returned here.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); no subscription check.
+      tags: [Support]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SupportTicketId"
+      responses:
+        "200":
+          description: Ticket, public messages, activity and attachments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Support ticket" }
+                  data:
+                    type: object
+                    properties:
+                      ticket:
+                        allOf:
+                          - $ref: "#/components/schemas/SupportTicket"
+                          - type: object
+                            properties:
+                              reporterName: { type: string }
+                              isMine: { type: boolean }
+                      messages:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: string }
+                            body: { type: string }
+                            createdAt: { type: string, format: date-time }
+                            author:
+                              type: object
+                              properties:
+                                name:
+                                  {
+                                    type: string,
+                                    example: "Ravi · Praesto Support",
+                                  }
+                                isStaff: { type: boolean }
+                      activities:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: string }
+                            type: { type: string, example: "status_changed" }
+                            fromValue: { type: string, nullable: true }
+                            toValue: { type: string, nullable: true }
+                            createdAt: { type: string, format: date-time }
+                            actor: { type: object }
+                      attachments:
+                        type: array
+                        items:
+                          { $ref: "#/components/schemas/SupportAttachment" }
+                      permissions:
+                        type: object
+                        properties:
+                          canReply: { type: boolean }
+                          canReopen: { type: boolean }
+                          canClose: { type: boolean }
+                          canRaise: { type: boolean }
+        "404":
+          description: Ticket not found or not visible to the caller
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/support/tickets/{ticketId}/replies:
+    post:
+      operationId: replyToSupportTicket
+      summary: Reply on a support ticket
+      description: >-
+        A tenant reply moves waiting_for_tenant back to in_progress and keeps
+        open/in_progress as they are. Resolved tickets must be reopened
+        first, and closed tickets accept no replies (400).
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); no subscription check.
+      tags: [Support]
+      parameters:
+        - $ref: "#/components/parameters/SupportTicketId"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [body]
+              properties:
+                body: { type: string, minLength: 1, maxLength: 10000 }
+                attachmentIds:
+                  type: array
+                  maxItems: 5
+                  default: []
+                  items: { type: string, pattern: "^[a-f0-9]{24}$" }
+            example:
+              {
+                body: "It still happens after clearing the cache.",
+                attachmentIds: [],
+              }
+      responses:
+        "201":
+          description: Reply sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Reply sent" }
+                  data:
+                    type: object
+                    properties:
+                      messageId: { type: string }
+                      status: { $ref: "#/components/schemas/SupportStatus" }
+        "400":
+          description: Validation error or the ticket's status does not accept replies
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/support/tickets/{ticketId}/reopen:
+    post:
+      operationId: reopenSupportTicket
+      summary: Reopen a resolved ticket
+      description: >-
+        Allowed within 14 days of resolution; the body is posted as a public message and the ticket returns to in_progress.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); no subscription check.
+      tags: [Support]
+      parameters:
+        - $ref: "#/components/parameters/SupportTicketId"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [body]
+              properties:
+                body: { type: string, minLength: 1, maxLength: 10000 }
+            example: { body: "The fix doesn't cover November payslips." }
+      responses:
+        "200":
+          description: Ticket reopened
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Ticket reopened" }
+                  data:
+                    type: object
+                    properties:
+                      status: { type: string, example: in_progress }
+        "400":
+          description: Not eligible for reopening (reason in message)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/support/tickets/{ticketId}/close:
+    post:
+      operationId: closeSupportTicket
+      summary: Confirm a resolution and close the ticket
+      description: >-
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); no subscription check.
+      tags: [Support]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SupportTicketId"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Ticket closed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Ticket closed" }
+                  data:
+                    type: object
+                    properties:
+                      status: { type: string, example: closed }
+        "400":
+          description: The ticket is not in a closable state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/support/attachments:
+    post:
+      operationId: createSupportUpload
+      summary: Start an attachment upload
+      description: >-
+        Step 1 of 2: returns a presigned S3 PUT URL. Upload the file there,
+        then call /complete. At most 30 unfinished uploads per person per
+        hour.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); no subscription check.
+      tags: [Support]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SupportUploadRequest" }
+            example:
+              {
+                fileName: "error-screenshot.png",
+                contentType: "image/png",
+                size: 48213,
+              }
+      responses:
+        "201":
+          description: Upload URL issued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupportUploadIssued" }
+        "400":
+          description: Disallowed type/extension, too large, or too many uploads in progress
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/support/attachments/{attachmentId}/complete:
+    post:
+      operationId: completeSupportUpload
+      summary: Verify an uploaded attachment
+      description: >-
+        Step 2 of 2: checks the stored object's size and sniffs its type from
+        its bytes. A mismatch deletes the object and marks the upload
+        rejected.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); no subscription check.
+      tags: [Support]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SupportAttachmentId"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Upload verified
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupportUploadVerified" }
+        "400":
+          description: Not uploaded yet, size mismatch, or content not an allowed type
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: Upload not found (not the caller's, or not pending)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/support/attachments/{attachmentId}/url:
+    get:
+      operationId: getSupportAttachmentUrl
+      summary: Get a download link for a ticket attachment
+      description: >-
+        Only public attachments on tickets the caller can see.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); no subscription check.
+      tags: [Support]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SupportAttachmentId"
+      responses:
+        "200":
+          description: Download link
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupportDownloadLink" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  # ── Praesto staff console ───────────────────────────────────────────────────
+  /api/v1/platform/support/stats:
+    get:
+      operationId: getPlatformSupportStats
+      summary: Support console overview
+      description: >-
+        Access: authenticated (bearer token or `access_token` cookie); Praesto support agents only — Praesto's own organisation owner/admin/superuser or PraestoSupport:handle_tickets (requireSupportAgent).
+      tags: [Platform Support]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Counts, 30-day response metrics and the 8 most recently updated tickets
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Support stats" }
+                  data:
+                    type: object
+                    properties:
+                      counts:
+                        type: object
+                        properties:
+                          total: { type: integer }
+                          open: { type: integer }
+                          inProgress: { type: integer }
+                          waiting: { type: integer }
+                          resolved: { type: integer }
+                          urgent: { type: integer }
+                          mine: { type: integer }
+                          unassigned: { type: integer }
+                      metrics:
+                        type: object
+                        properties:
+                          windowDays: { type: integer, example: 30 }
+                          avgFirstResponseHours:
+                            { type: number, nullable: true, example: 3.5 }
+                          firstResponseSample: { type: integer }
+                          avgResolutionHours: { type: number, nullable: true }
+                          resolutionSample: { type: integer }
+                      recent:
+                        type: array
+                        items:
+                          allOf:
+                            - $ref: "#/components/schemas/StaffSupportTicket"
+                            - type: object
+                              properties:
+                                tenantName: { type: string }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/platform/support/agents:
+    get:
+      operationId: listSupportAgents
+      summary: List people tickets can be assigned to
+      description: >-
+        Access: authenticated (bearer token or `access_token` cookie); Praesto support agents only — Praesto's own organisation owner/admin/superuser or PraestoSupport:handle_tickets (requireSupportAgent).
+      tags: [Platform Support]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Support agents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Support agents" }
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/SupportPerson" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/platform/support/tickets:
+    get:
+      operationId: listPlatformSupportTickets
+      summary: List tickets across all organisations
+      description: >-
+        Access: authenticated (bearer token or `access_token` cookie); Praesto support agents only — Praesto's own organisation owner/admin/superuser or PraestoSupport:handle_tickets (requireSupportAgent).
+      tags: [Platform Support]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SupportStatusFilter"
+        - $ref: "#/components/parameters/SupportCategoryFilter"
+        - $ref: "#/components/parameters/SupportPriorityFilter"
+        - $ref: "#/components/parameters/SupportSort"
+        - name: search
+          in: query
+          description: Matches ticket number, subject or organisation name/slug.
+          schema: { type: string, maxLength: 100 }
+        - name: tenantId
+          in: query
+          schema: { type: string, pattern: "^[a-f0-9]{24}$" }
+        - name: assignee
+          in: query
+          description: '"me", "unassigned", or an agent user id.'
+          schema: { type: string }
+        - name: from
+          in: query
+          description: Created on or after this date (ISO).
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          description: Created on or before this date (the whole day is included).
+          schema: { type: string, format: date }
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/LimitParam"
+      responses:
+        "200":
+          description: One page of tickets
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Support tickets" }
+                  data:
+                    type: object
+                    properties:
+                      tickets:
+                        type: array
+                        items:
+                          allOf:
+                            - $ref: "#/components/schemas/StaffSupportTicket"
+                            - type: object
+                              properties:
+                                tenantName: { type: string }
+                                reporterName: { type: string }
+                                assigneeName: { type: string, nullable: true }
+                      total: { type: integer }
+                      page: { type: integer }
+                      limit: { type: integer }
+        "400":
+          description: Invalid status/category/priority/organisation/assignee filter, date or sort
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/platform/support/tickets/{ticketId}:
+    get:
+      operationId: getPlatformSupportTicket
+      summary: Get a ticket with its full thread (staff)
+      description: >-
+        Includes internal notes and internal attachments. Opening a security
+        ticket records a "security_viewed" internal activity (at most once per
+        agent per window).
+
+
+        Access: authenticated (bearer token or `access_token` cookie); Praesto support agents only — Praesto's own organisation owner/admin/superuser or PraestoSupport:handle_tickets (requireSupportAgent).
+      tags: [Platform Support]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SupportTicketId"
+      responses:
+        "200":
+          description: Ticket detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Support ticket" }
+                  data:
+                    type: object
+                    properties:
+                      ticket:
+                        { $ref: "#/components/schemas/StaffSupportTicket" }
+                      tenant:
+                        type: object
+                        nullable: true
+                        properties:
+                          id: { type: string }
+                          name: { type: string }
+                          slug: { type: string }
+                          planTier: { type: string, nullable: true }
+                          subscriptionStatus: { type: string, nullable: true }
+                          isActive: { type: boolean }
+                          createdAt: { type: string, format: date-time }
+                      reporter: { $ref: "#/components/schemas/SupportPerson" }
+                      assignee: { $ref: "#/components/schemas/SupportPerson" }
+                      participants:
+                        type: array
+                        items: { $ref: "#/components/schemas/SupportPerson" }
+                      duplicateOf:
+                        type: object
+                        nullable: true
+                        properties:
+                          id: { type: string }
+                          ticketNo: { type: string }
+                      messages:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: string }
+                            body: { type: string }
+                            visibility:
+                              { type: string, enum: [public, internal] }
+                            authorType: { type: string, enum: [tenant, staff] }
+                            createdAt: { type: string, format: date-time }
+                            author:
+                              { $ref: "#/components/schemas/SupportPerson" }
+                      activities:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: string }
+                            type: { type: string }
+                            fromValue: { type: string, nullable: true }
+                            toValue: { type: string, nullable: true }
+                            visibility:
+                              { type: string, enum: [public, internal] }
+                            actorType: { type: string }
+                            createdAt: { type: string, format: date-time }
+                            actor:
+                              { $ref: "#/components/schemas/SupportPerson" }
+                      attachments:
+                        type: array
+                        items:
+                          { $ref: "#/components/schemas/SupportAttachment" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+    patch:
+      operationId: updateTicketAsAgent
+      summary: Change a ticket's status, priority or assignee
+      description: >-
+        Version-guarded: send the version you read. Status changes must follow
+        the staff transition table (open -> in_progress, waiting_for_tenant,
+        resolved, closed; closed is final). If nothing changes the response is
+        200 "Nothing changed".
+
+
+        Access: authenticated (bearer token or `access_token` cookie); Praesto support agents only — Praesto's own organisation owner/admin/superuser or PraestoSupport:handle_tickets (requireSupportAgent).
+      tags: [Platform Support]
+      parameters:
+        - $ref: "#/components/parameters/SupportTicketId"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version]
+              properties:
+                status: { $ref: "#/components/schemas/SupportStatus" }
+                priority: { $ref: "#/components/schemas/SupportPriority" }
+                assigneeId:
+                  type: string
+                  nullable: true
+                  pattern: "^[a-f0-9]{24}$"
+                  description: null unassigns.
+                version: { type: integer, minimum: 0 }
+            example:
+              {
+                status: in_progress,
+                assigneeId: "6650c2f1a9b3c4d5e6f70812",
+                version: 3,
+              }
+      responses:
+        "200":
+          description: Ticket updated (or nothing changed)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    {
+                      type: string,
+                      enum: ["Ticket updated", "Nothing changed"],
+                    }
+                  data: { $ref: "#/components/schemas/StaffSupportTicket" }
+        "400":
+          description: Validation error, disallowed status transition or invalid assignee
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The ticket changed since `version` was read; reload and retry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/platform/support/tickets/{ticketId}/replies:
+    post:
+      operationId: replyAsAgent
+      summary: Reply publicly or add an internal note
+      description: >-
+        visibility=public notifies the organisation and may also move the
+        ticket to waiting_for_tenant, in_progress or resolved; internal notes
+        are never shown to the organisation. Version-guarded.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); Praesto support agents only — Praesto's own organisation owner/admin/superuser or PraestoSupport:handle_tickets (requireSupportAgent).
+      tags: [Platform Support]
+      parameters:
+        - $ref: "#/components/parameters/SupportTicketId"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [body, visibility, version]
+              properties:
+                body: { type: string, minLength: 1, maxLength: 10000 }
+                visibility: { type: string, enum: [public, internal] }
+                status:
+                  {
+                    type: string,
+                    enum: [waiting_for_tenant, in_progress, resolved],
+                  }
+                attachmentIds:
+                  type: array
+                  maxItems: 5
+                  default: []
+                  items: { type: string, pattern: "^[a-f0-9]{24}$" }
+                version: { type: integer, minimum: 0 }
+            example:
+              {
+                body: "We've deployed a fix — please try again.",
+                visibility: public,
+                status: resolved,
+                version: 4,
+              }
+      responses:
+        "201":
+          description: Reply sent / Internal note added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    {
+                      type: string,
+                      enum: ["Reply sent", "Internal note added"],
+                    }
+                  data:
+                    type: object
+                    properties:
+                      messageId: { type: string }
+                      status: { $ref: "#/components/schemas/SupportStatus" }
+        "400":
+          description: Validation error or the ticket is closed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Version conflict
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/platform/support/tickets/{ticketId}/duplicate:
+    post:
+      operationId: markSupportTicketDuplicate
+      summary: Close a ticket as a duplicate of another
+      description: >-
+        Access: authenticated (bearer token or `access_token` cookie); Praesto support agents only — Praesto's own organisation owner/admin/superuser or PraestoSupport:handle_tickets (requireSupportAgent).
+      tags: [Platform Support]
+      parameters:
+        - $ref: "#/components/parameters/SupportTicketId"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [duplicateOfTicketNo, version]
+              properties:
+                duplicateOfTicketNo:
+                  {
+                    type: string,
+                    pattern: "^PRA-\\d{4}-\\d{6}$",
+                    example: "PRA-2026-000101",
+                  }
+                version: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: Closed as a duplicate
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message:
+                    {
+                      type: string,
+                      example: "Closed as a duplicate of PRA-2026-000101",
+                    }
+        "400":
+          description: Validation error, or the original can't be used (reason in message)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Version conflict
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/platform/support/attachments:
+    post:
+      operationId: createAgentUpload
+      summary: Start an attachment upload (staff)
+      description: >-
+        Same two-step flow as POST /support/attachments; files are stored under the staff prefix.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); Praesto support agents only — Praesto's own organisation owner/admin/superuser or PraestoSupport:handle_tickets (requireSupportAgent).
+      tags: [Platform Support]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SupportUploadRequest" }
+      responses:
+        "201":
+          description: Upload URL issued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupportUploadIssued" }
+        "400":
+          description: Disallowed type/extension, too large, or too many uploads in progress
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/platform/support/attachments/{attachmentId}/complete:
+    post:
+      operationId: completeAgentUpload
+      summary: Verify an uploaded attachment (staff)
+      description: >-
+        Access: authenticated (bearer token or `access_token` cookie); Praesto support agents only — Praesto's own organisation owner/admin/superuser or PraestoSupport:handle_tickets (requireSupportAgent).
+      tags: [Platform Support]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SupportAttachmentId"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Upload verified
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupportUploadVerified" }
+        "400":
+          description: Not uploaded yet, size mismatch, or content not an allowed type
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/platform/support/attachments/{attachmentId}/url:
+    get:
+      operationId: getAgentAttachmentUrl
+      summary: Get a download link for any ticket attachment (staff)
+      description: >-
+        Access: authenticated (bearer token or `access_token` cookie); Praesto support agents only — Praesto's own organisation owner/admin/superuser or PraestoSupport:handle_tickets (requireSupportAgent).
+      tags: [Platform Support]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SupportAttachmentId"
+      responses:
+        "200":
+          description: Download link
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupportDownloadLink" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"

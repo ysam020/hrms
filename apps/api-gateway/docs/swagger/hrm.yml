@@ -1,15 +1,20 @@
 paths:
   /api/v1/get-hr-activities:
     get:
+      operationId: getHrActivities
       summary: List HR activities
       description: >-
         Paginated, searchable list of HR activity records (title/description
         entries logged against employees or the organisation, e.g. warnings,
         commendations, notices). Results are cached per tenant/page/filter.
         Soft-deleted activities (status "deleted") are always excluded.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [HR Activities]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: page
           in: query
@@ -75,16 +80,31 @@ paths:
                           totalPages: { type: integer }
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/hr-activity/{_id}:
     get:
+      operationId: getHrActivity
       summary: Get a specific HR activity
       description: >-
         Returns a single HR activity record via the hrm-service gRPC backend
         (getHrActivity). Response shape is passed through as-is.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [HR Activities]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: _id
           in: path
@@ -97,18 +117,36 @@ paths:
           description: Unauthorized
         "404":
           description: HR activity not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/add-hr-activity:
     post:
+      operationId: addHrActivity
       summary: Create HR activity
       description: >-
         Records a new HR activity entry. Requires super user privileges
         (tenant owner, or a user explicitly flagged isSuperUser). createdBy is
         set from the authenticated user, not the request body. Invalidates the
         cached activities list for the tenant.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [HR Activities]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -141,23 +179,40 @@ paths:
           description: Unauthorized
         "403":
           description: Forbidden — requires super user privileges
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/edit-hr-activity/{_id}:
     put:
+      operationId: editHrActivity
       summary: Edit HR activity
       description: >-
         Updates an existing HR activity record. Requires super user
         privileges, and additionally only the user who originally created the
         activity may edit it (403 if the caller isn't the creator, 404 if the
         record doesn't exist). All body fields are optional (partial update).
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [HR Activities]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: _id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -179,22 +234,44 @@ paths:
           description: Forbidden — only the activity's creator may edit it
         "404":
           description: HR activity not found
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: "This announcement was changed by someone else."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/delete-hr-activity/{_id}:
     delete:
+      operationId: deleteHrActivity
       summary: Delete HR activity
       description: >-
         Soft-deletes an HR activity record (status set to "deleted",
         deletedBy/deletedOn recorded). Requires super user privileges, and
         only the activity's original creator may delete it.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [HR Activities]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: _id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: HR activity deleted
@@ -216,18 +293,34 @@ paths:
           description: Forbidden — only the activity's creator may delete it
         "404":
           description: HR activity not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/bulk-delete-hr-activities:
     put:
+      operationId: bulkDeleteHrActivities
       summary: Bulk delete HR activities
       description: >-
         Soft-deletes multiple HR activity records at once. Requires super user
         privileges. Only activities owned (created) by the caller are
         actually deleted — ids that don't exist, or belong to someone else,
         are reported back in `notFound` rather than causing a failure.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [HR Activities]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -263,9 +356,20 @@ paths:
           description: Unauthorized
         "403":
           description: Forbidden — requires super user privileges
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/policies:
     get:
+      operationId: getPolicies
       summary: List all policies
       description: >-
         Paginated list of HR policy documents (excludes soft-deleted, i.e.
@@ -273,9 +377,13 @@ paths:
         (alias of policyType), `title` (alias of policyName), `createdAt` and
         `updatedAt` aliases alongside the raw Policy fields. Result is cached
         per tenant/page/limit.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Policies]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: page
           in: query
@@ -332,16 +440,34 @@ paths:
                   totalPages: { type: integer }
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
     post:
+      operationId: createOrUpdatePolicy
       summary: Create or update a policy
       description: >-
         Requires super user privileges. Looks for an existing non-deleted
         policy matching `policyType` (and, when `policyType` is "Other", also
         matching `policyName`) — if found, updates its content in place;
         otherwise creates a new policy. Invalidates the cached policies list.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Policies]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -377,16 +503,29 @@ paths:
           description: Unauthorized
         "403":
           description: Forbidden — requires super user privileges
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/policies/{id}:
     get:
+      operationId: getPolicy
       summary: Get a specific policy
       description: >-
         Returns a single policy via the hrm-service gRPC backend (getPolicy).
         Response shape is passed through as-is.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Policies]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -399,19 +538,36 @@ paths:
           description: Unauthorized
         "404":
           description: Policy not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
     put:
+      operationId: updatePolicy
       summary: Update a policy
       description: >-
         Requires super user privileges. All fields optional (partial update).
         Invalidates the cached policies list.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Policies]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -437,19 +593,36 @@ paths:
           description: Unauthorized
         "403":
           description: Forbidden — requires super user privileges
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
     delete:
+      operationId: deletePolicy
       summary: Delete a policy
       description: >-
         Requires super user privileges. Soft-deletes the policy (status set
         to "Deleted") and invalidates the cached policies list.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Policies]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Policy deleted
@@ -465,17 +638,30 @@ paths:
           description: Unauthorized
         "403":
           description: Forbidden — requires super user privileges
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/policies/{id}/pdf:
     get:
+      operationId: getPolicyPdf
       summary: Download policy as PDF
       description: >-
         Generates a branded PDF of the policy document on the fly (cover
         page + rendered HTML content, paginated) and streams it back as an
         attachment. Not cached.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Policies]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -493,17 +679,32 @@ paths:
           description: Unauthorized
         "404":
           description: Policy not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/is-superuser/{username}:
     get:
+      operationId: isSuperuser
       summary: Check if a user is a superuser
       description: >-
         Requires super user privileges to call. Looks up the target user by
         username (not id) and returns their isSuperUser flag directly — this
         is a raw field lookup, not a resource:action permission check.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [HR Activities]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: username
           in: path
@@ -526,3 +727,11 @@ paths:
           description: Forbidden — requires super user privileges
         "404":
           description: User not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"

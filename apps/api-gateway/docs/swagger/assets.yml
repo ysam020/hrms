@@ -1,15 +1,20 @@
 paths:
   /api/v1/assets/issues:
     get:
+      operationId: listAssetIssues
       summary: List asset issues
       description: >
         Lists reported asset issues (malfunction, damage, lost, stolen,
         return request, other). HR/admin/owner/superusers (or `Assets:manage`
         grantees) see every issue across the tenant; other employees see only
         issues they personally reported.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Assets]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: status
           in: query
@@ -50,7 +55,18 @@ paths:
                   total: { type: integer, example: 12 }
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
     post:
+      operationId: reportAssetIssue
       summary: Report an asset issue
       description: >
         An employee reports a problem with an asset currently assigned to
@@ -58,9 +74,16 @@ paths:
         HR/admin/owner may report on any asset; other employees must
         currently hold the asset. Duplicate open issues of the same type on
         the same asset are rejected with 409.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Assets]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -115,16 +138,36 @@ paths:
           description: An open issue of this type already exists for this asset
         "401":
           description: Unauthorized
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          description: "Asset not found"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/assets/issues/{issueId}:
     get:
+      operationId: getAssetIssue
       summary: Get an asset issue
       description: >
         Returns full issue detail enriched with asset and reporter/reviewer
         info. HR sees any issue; other employees only their own.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Assets]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: issueId
           in: path
@@ -146,9 +189,18 @@ paths:
           description: Issue not found
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/assets/issues/{issueId}/status:
     patch:
+      operationId: updateAssetIssueStatus
       summary: Update an asset issue's status
       description: >
         HR/admin/owner-only lifecycle transition: open → in_review/rejected,
@@ -158,14 +210,20 @@ paths:
         the asset to maintenance; return_request closes the assignment and
         frees the asset, same as a normal return. Auto-effects are skipped
         (with a note in the response) if the asset has since been reassigned.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Assets]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: issueId
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -201,17 +259,35 @@ paths:
           description: Forbidden
         "401":
           description: Unauthorized
+        "404":
+          description: "Issue not found"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/assets/summary:
     get:
+      operationId: getAssetSummary
       summary: Get asset inventory summary
       description: >
         HR/admin/owner-only dashboard aggregate — asset counts by status and
         category, count of open issues needing HR action, and count of
         assignments pending employee acknowledgement.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Assets]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Asset summary retrieved
@@ -233,16 +309,29 @@ paths:
           description: Forbidden
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/assets/categories:
     get:
+      operationId: listAssetCategories
       summary: List asset categories
       description: >
         Tenant-scoped lookup of active asset categories, used to populate the
         Category autocomplete in the Create Asset dialog.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Assets]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Asset categories retrieved
@@ -255,15 +344,33 @@ paths:
                   data: { type: array, items: { type: object } }
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
     post:
+      operationId: createAssetCategory
       summary: Create an asset category
       description: >
         HR/admin/owner-only. Persists a newly-typed category so it appears in
         the dropdown next time. If the category already exists for the
         tenant, returns 200 as a no-op success rather than an error.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Assets]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -289,9 +396,20 @@ paths:
           description: Forbidden
         "401":
           description: Unauthorized
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/assets/assign:
     post:
+      operationId: assignAsset
       summary: Assign an asset to an employee
       description: >
         HR/admin/owner-only. Assigns an "available" asset to an active
@@ -299,9 +417,16 @@ paths:
         the backing assignment record. Fails with 409 if the asset is not
         currently available (including a race with a concurrent assign
         call), and with 400 if the target employee is not active.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Assets]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -336,17 +461,33 @@ paths:
           description: Forbidden
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/assets/return:
     post:
+      operationId: returnAsset
       summary: Return an assigned asset
       description: >
         HR/admin/owner-only. Records the return of a currently-assigned
         asset, closing the active assignment and setting the asset back to
         "available" (or "maintenance" if returned in damaged condition).
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Assets]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -377,23 +518,38 @@ paths:
           description: Forbidden
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/assets/assignments/{assignmentId}/acknowledge:
     post:
+      operationId: acknowledgeAssignment
       summary: Acknowledge asset receipt
       description: >
         The employee holding an assignment confirms they received the asset
         in the stated condition. Only the assignment's own holder may call
         this; fails with 409 if already acknowledged, or 400 if the
         assignment has since been returned.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Assets]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: assignmentId
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         content:
           application/json:
@@ -421,18 +577,31 @@ paths:
           description: Assignment already acknowledged
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/assets:
     get:
+      operationId: listAssets
       summary: List assets
       description: >
         Lists inventory assets with optional status/category/search filters.
         HR/admin/owner/superusers see all assets (optionally filtered to a
         specific employee's currently-assigned assets via `userId`); other
         employees only ever see their own currently-assigned assets.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Assets]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: status
           in: query
@@ -466,15 +635,33 @@ paths:
                   total: { type: integer, example: 40 }
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
     post:
+      operationId: createAsset
       summary: Create an asset
       description: >
         HR/admin/owner-only. Adds a new asset to inventory with status
         "available". `assetCode` is unique per tenant and normalized to
         uppercase.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Assets]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -512,17 +699,32 @@ paths:
           description: Forbidden
         "401":
           description: Unauthorized
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/assets/{assetId}:
     get:
+      operationId: getAsset
       summary: Get an asset
       description: >
         Returns full asset detail including assignment history enriched with
         holder names. HR/admin/owner see any asset; other employees only if
         they currently hold it.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Assets]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: assetId
           in: path
@@ -544,7 +746,16 @@ paths:
           description: Asset not found
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
     patch:
+      operationId: updateAsset
       summary: Update an asset
       description: >
         HR/admin/owner-only. Updates asset metadata (name, category, brand,
@@ -553,14 +764,20 @@ paths:
         (use the assign endpoint), cannot be set to "available" while
         currently assigned (use return), and a retired asset's status can
         never be changed again.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Assets]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: assetId
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -600,21 +817,36 @@ paths:
           description: Asset not found
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
     delete:
+      operationId: retireAsset
       summary: Retire an asset (deprecated alias)
       description: >
         HR/admin/owner-only. Deprecated backward-compatibility alias for
         `POST /assets/{assetId}/retire` — kept so older clients continue to
         work. Prefer the POST retire endpoint for new integrations. Fails
         with 409 if the asset is currently assigned.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Assets]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: assetId
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Asset retired
@@ -633,22 +865,37 @@ paths:
           description: Asset not found
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/assets/{assetId}/retire:
     post:
+      operationId: retireAssetPost
       summary: Retire an asset
       description: >
         HR/admin/owner-only. Primary retirement endpoint — marks an asset's
         status as "retired" (terminal state). Fails with 409 if the asset is
         currently assigned; it must be returned first.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Assets]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: assetId
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Asset retired
@@ -667,3 +914,11 @@ paths:
           description: Asset not found
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"

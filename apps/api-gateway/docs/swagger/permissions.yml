@@ -1,11 +1,17 @@
 paths:
   /api/v1/get-roles:
     get:
+      operationId: getRoles
       summary: Get all roles
-      description: Returns all roles defined for the current tenant.
+      description: >-
+        Returns all roles defined for the current tenant.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Permissions]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Roles retrieved
@@ -33,14 +39,33 @@ paths:
                               imgURL: { type: string }
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/create-role:
     post:
+      operationId: createRole
       summary: Create a role
-      description: Creates a new role (starts with no permissions and no assigned users). Requires superuser.
+      description: >-
+        Creates a new role (starts with no permissions and no assigned users). Requires superuser.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Permissions]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -71,21 +96,36 @@ paths:
           description: Unauthorized
         "403":
           description: Requires superuser
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/delete-role/{_id}:
     delete:
+      operationId: deleteRole
       summary: Delete a role
       description: >
         Removes a role. Fails if any user still has this role assigned.
         Requires superuser.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Permissions]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: _id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Role deleted
@@ -105,21 +145,36 @@ paths:
           description: Requires superuser
         "404":
           description: Role not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/update-role-permissions/{_id}:
     put:
+      operationId: updateRolePermissions
       summary: Update role permissions
       description: >
         Replaces the permission set for an existing role. Unknown permission
         keys are rejected. Requires superuser.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Permissions]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: _id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -154,14 +209,28 @@ paths:
           description: Requires superuser
         "404":
           description: Role not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-role-permissions/{_id}:
     get:
+      operationId: getRolePermissions
       summary: Get permissions for a role
-      description: Returns the name and permission set of a specific role.
+      description: >-
+        Returns the name and permission set of a specific role.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Permissions]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: _id
           in: path
@@ -186,14 +255,30 @@ paths:
           description: Unauthorized
         "404":
           description: Role not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-role-and-permissions:
     get:
+      operationId: getRoleAndPermissions
       summary: Get all roles with their permissions
-      description: Returns every role for the tenant along with its permission set (no assignedTo).
+      description: >-
+        Returns every role for the tenant along with its permission set (no assignedTo).
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Permissions]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Roles and permissions retrieved
@@ -213,18 +298,36 @@ paths:
                         permissions: { type: array, items: { type: string } }
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/save-user-permissions:
     put:
+      operationId: saveUserPermissions
       summary: Save user-level permissions
       description: >
         Sets a user's custom permissions (overwrites, not merges) and
         optionally assigns them a role (adding it to their role list and to
         that role's assignedTo). Fires an in-app + email notification to the
         user when permissions are newly granted. Requires superuser.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Permissions]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -275,14 +378,28 @@ paths:
           description: Requires superuser
         "404":
           description: User not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-user-permissions/{username}:
     get:
+      operationId: getUserPermissions
       summary: Get user-level permissions
-      description: Returns the custom permissions and role list stored directly on the user record.
+      description: >-
+        Returns the custom permissions and role list stored directly on the user record.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Permissions]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: username
           in: path
@@ -305,19 +422,37 @@ paths:
                       role: { type: array, items: { type: string } }
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/update-superuser/{username}:
     put:
+      operationId: updateSuperuser
       summary: Toggle superuser status
-      description: Grants or revokes superuser privileges for a user. Requires superuser.
+      description: >-
+        Grants or revokes superuser privileges for a user. Requires superuser.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Permissions]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: username
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -346,17 +481,33 @@ paths:
           description: Requires superuser
         "404":
           description: User not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/delete-user-role:
     post:
+      operationId: deleteUserRole
       summary: Remove a role from a user
       description: >
         Unassigns a role from a user, also stripping any permissions that came
         from that role and removing the user from the role's assignedTo list.
         Requires superuser.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Permissions]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -401,14 +552,28 @@ paths:
           description: Requires superuser
         "404":
           description: Role or user not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-teams:
     get:
+      operationId: getTeams
       summary: Get all teams
-      description: Returns all teams for the tenant, with team leader and member names resolved.
+      description: >-
+        Returns all teams for the tenant, with team leader and member names resolved.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Teams]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Teams retrieved
@@ -440,18 +605,33 @@ paths:
                               employeePhoto: { type: string, nullable: true }
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-org-chart:
     get:
+      operationId: getOrgChart
       summary: Get organization chart
       description: >
         Returns the CEO, all teams (with resolved leader/member names), active
         employees not yet assigned to any team, and headcount stats
         (totalEmployeeCount, employeeStatusBreakdown) for the Organization Tree
         page.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Teams]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Org chart retrieved
@@ -503,14 +683,33 @@ paths:
                           absconded: { type: integer }
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/create-team:
     post:
+      operationId: createTeam
       summary: Create a team
-      description: Creates a new team with a leader and initial members. Requires superuser.
+      description: >-
+        Creates a new team with a leader and initial members. Requires superuser.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Teams]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -550,19 +749,35 @@ paths:
           description: Unauthorized
         "403":
           description: Requires superuser
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/delete-team/{_id}:
     delete:
+      operationId: deleteTeam
       summary: Delete a team
-      description: Removes a team permanently. Requires superuser.
+      description: >-
+        Removes a team permanently. Requires superuser.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Teams]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: _id
           in: path
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Team deleted
@@ -580,14 +795,31 @@ paths:
           description: Requires superuser
         "404":
           description: Team not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/add-team-members:
     put:
+      operationId: addTeamMembers
       summary: Add members to a team
-      description: Adds one or more user IDs to an existing team's member list. Requires superuser.
+      description: >-
+        Adds one or more user IDs to an existing team's member list. Requires superuser.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Teams]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -620,14 +852,31 @@ paths:
           description: Requires superuser
         "404":
           description: Team not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/delete-user-from-team:
     post:
+      operationId: deleteUserFromTeam
       summary: Remove a user from a team
-      description: Removes a specific user (by ID) from a team's member list. Requires superuser.
+      description: >-
+        Removes a specific user (by ID) from a team's member list. Requires superuser.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner or superuser only (requireSuperUser).
       tags: [Teams]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -660,3 +909,11 @@ paths:
           description: Requires superuser
         "404":
           description: Team not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"

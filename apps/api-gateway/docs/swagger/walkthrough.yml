@@ -1,0 +1,160 @@
+# Product walkthrough progress (src/routes/walkthrough.ts,
+# handlers/walkthrough.ts). Mounted at /api/v1/walkthrough behind authenticate +
+# requireTenant + idempotency, deliberately without the subscription check.
+components:
+  schemas:
+    WalkthroughState:
+      type: object
+      description: >-
+        Sanitised server-side: unknown fields are dropped, malformed tours are
+        left out, at most 64 tours and 400 ids per list, 32 KB serialised.
+      required: [schema, tours]
+      properties:
+        schema: { type: integer, enum: [1] }
+        version: { type: integer, example: 3 }
+        active: { type: string, nullable: true, example: "leave-basics" }
+        updatedAt: { type: string, format: date-time }
+        tours:
+          type: object
+          description: Keyed by tour id (^[a-z0-9][a-z0-9._-]{0,99}$, case-insensitive).
+          additionalProperties:
+            type: object
+            required: [status]
+            properties:
+              status:
+                {
+                  type: string,
+                  enum: [not_started, running, paused, completed, dismissed],
+                }
+              stepId: { type: string, nullable: true }
+              seen: { type: array, items: { type: string } }
+              skipped: { type: array, items: { type: string } }
+              lastRoute:
+                type: string
+                nullable: true
+                description: App-relative path starting with "/", at most 300 characters.
+              updatedAt: { type: string, format: date-time }
+    WalkthroughStateResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: object
+          properties:
+            state:
+              allOf: [{ $ref: "#/components/schemas/WalkthroughState" }]
+              nullable: true
+
+paths:
+  /api/v1/walkthrough/progress:
+    get:
+      operationId: getWalkthroughProgress
+      summary: Get my walkthrough progress
+      description: >-
+        Returns the saved state, or null before the first save. Cached for an hour per user.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); no subscription check.
+      tags: [Walkthrough]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Progress state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WalkthroughStateResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+    put:
+      operationId: saveWalkthroughProgress
+      summary: Save my walkthrough progress
+      description: >-
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); no subscription check.
+      tags: [Walkthrough]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [state]
+              properties:
+                state: { $ref: "#/components/schemas/WalkthroughState" }
+            example:
+              state:
+                schema: 1
+                version: 2
+                active: "leave-basics"
+                tours:
+                  leave-basics:
+                    status: running
+                    stepId: "apply-button"
+                    seen: ["intro"]
+                    skipped: []
+                    lastRoute: "/leave"
+                    updatedAt: "2026-11-12T09:30:00.000Z"
+      responses:
+        "200":
+          description: The sanitised state as stored
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WalkthroughStateResponse" }
+        "400":
+          description: '"Unsupported walkthrough state." or "Walkthrough state is too large."'
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+    delete:
+      operationId: resetWalkthroughProgress
+      summary: Reset my walkthrough progress
+      description: >-
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); no subscription check.
+      tags: [Walkthrough]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Progress deleted; state is null
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WalkthroughStateResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"

@@ -1,6 +1,7 @@
 paths:
   /api/v1/edit-employee-details:
     put:
+      operationId: editEmployeeDetails
       summary: Edit employee lifecycle/statutory details
       description: >-
         Updates an employee's employment status (Active/Terminated/Absconded),
@@ -11,9 +12,16 @@ paths:
         "Active" grows headcount and is blocked with `SEAT_LIMIT_REACHED` if
         the tenant's plan seat limit has been reached. Invalidates the
         employee list/detail/insights caches for the affected user.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Employee]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -69,9 +77,18 @@ paths:
           description: Forbidden — caller lacks EmployeeManagement:edit and is not owner/admin/superuser
         "404":
           description: Employee not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-employee-details/{username}:
     get:
+      operationId: getEmployeeDetails
       summary: Get employee details
       description: >-
         Returns profile fields plus the employee's current salary structure
@@ -81,9 +98,13 @@ paths:
         included when the caller is viewing their own record or is HR-or-above
         — otherwise those fields are stripped from the response. Results are
         cached per tenant/username.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Employee]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: username
           in: path
@@ -138,9 +159,20 @@ paths:
           description: Unauthorized
         "404":
           description: Employee not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/employee-insights:
     get:
+      operationId: employeeInsights
       summary: Employee headcount insights
       description: >-
         Aggregate employee counts only (no per-employee PII) — powers the
@@ -148,9 +180,13 @@ paths:
         Employee Management "Insights" tab. Deliberately left open to any
         authenticated caller; tab-level gating to HR+ is enforced by the
         frontend, not here. Cached per tenant.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); owner, admin, HR or superuser only (requireHrPrivileged).
       tags: [Employee]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Employee insights fetched
@@ -183,9 +219,20 @@ paths:
                             activeCount: { type: integer, example: 12 }
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/complete-kyc:
     post:
+      operationId: completeKyc
       summary: Submit KYC details
       description: >-
         Submits/creates the authenticated employee's own KYC record
@@ -193,9 +240,16 @@ paths:
         employee-service's submitKyc RPC. All fields are optional at the
         gateway validation layer; submitKyc enforces its own completeness
         rules downstream.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Employee]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -248,9 +302,20 @@ paths:
           description: Invalid KYC data
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/edit-kyc:
     put:
+      operationId: editKyc
       summary: Edit an existing KYC submission
       description: >-
         Edits a KYC record identified by `username` (required by the handler,
@@ -260,9 +325,16 @@ paths:
         is "Approved", "Rejected", "Edit Requested", or the caller has already
         used their one allowed edit within a granted edit window. Accepts the
         same field set as complete-kyc.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Employee]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -285,6 +357,22 @@ paths:
                 bank_account_no: { type: string, maxLength: 32 }
                 bank_name: { type: string, maxLength: 128 }
                 ifsc_code: { type: string, maxLength: 16 }
+                permanent_address_line_1: { type: string, maxLength: 256 }
+                permanent_address_line_2: { type: string, maxLength: 256 }
+                permanent_address_city: { type: string, maxLength: 128 }
+                permanent_address_state: { type: string, maxLength: 128 }
+                permanent_address_pincode: { type: string, maxLength: 16 }
+                communication_address_line_1: { type: string, maxLength: 256 }
+                communication_address_line_2: { type: string, maxLength: 256 }
+                communication_address_city: { type: string, maxLength: 128 }
+                communication_address_state: { type: string, maxLength: 128 }
+                communication_address_pincode: { type: string, maxLength: 16 }
+                aadhar_photo_front: { type: string, maxLength: 4096 }
+                aadhar_photo_back: { type: string, maxLength: 4096 }
+                pan_photo: { type: string, maxLength: 4096 }
+                education_certificates: { type: array, items: { type: string } }
+                experience_certificate: { type: string, maxLength: 4096 }
+                electricity_bill: { type: string, maxLength: 4096 }
       responses:
         "200":
           description: KYC updated (passthrough of submitKyc RPC response)
@@ -304,9 +392,18 @@ paths:
           description: Editing someone else's KYC without permission
         "404":
           description: Employee not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/kyc-approval:
     post:
+      operationId: kycApproval
       summary: Approve or request revision on a KYC submission
       description: >-
         Decides a submitted KYC. `kyc_approval` must be "Approved" or
@@ -316,9 +413,16 @@ paths:
         when requesting a revision. Requires HR/owner/admin/superuser or the
         matching granular `BasicKYCDetails:approve_kyc:all` /
         `BasicKYCDetails:request_kyc_revision:all` permission.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Employee]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -354,18 +458,31 @@ paths:
           description: Caller lacks the approve/revision-request permission
         "404":
           description: User not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/view-all-kycs:
     get:
+      operationId: viewAllKycs
       summary: List KYC submissions
       description: >-
         Paginated list of active employees' KYC status. Non-privileged
         callers only ever see their own record; privileged callers (HR+,
         superuser) additionally get free-text `search` (username/name/
         department/designation) and `status` filtering.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Employee]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: page
           in: query
@@ -424,18 +541,33 @@ paths:
                           totalPages: { type: integer }
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-kyc-insights:
     get:
+      operationId: getKycInsights
       summary: KYC completion insights
       description: >-
         Aggregate tenant-wide KYC statistics (approved/pending/rejected
         counts and completion rate) for the Dashboard KYC widget and the KYC
         "Insights" tab. Open to any authenticated user; tab-level gating to
         HR+ is enforced by the frontend.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Employee]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: KYC insights fetched
@@ -461,17 +593,33 @@ paths:
           description: Unauthorized
         "500":
           description: No tenant context on the request
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/request-kyc-edit-access:
     post:
+      operationId: requestKycEditAccess
       summary: Request access to re-edit an approved KYC
       description: >-
         Self-service only — lets an employee whose KYC is already "Approved"
         ask HR to reopen it for one more edit. Records a reason; HR grants the
         request via PUT /allow-kyc-edit.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Employee]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -496,9 +644,22 @@ paths:
                   success: { type: boolean, example: true }
         "401":
           description: Unauthorized
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/allow-kyc-edit:
     put:
+      operationId: allowKycEdit
       summary: Grant a pending KYC edit-access request
       description: >-
         HR action that reopens an "Edit Requested" KYC back to editable
@@ -506,9 +667,16 @@ paths:
         the `BasicKYCDetails:request_kyc_revision:all` permission. No request
         body schema is enforced by middleware; `username` is required by the
         handler.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Employee]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -535,9 +703,18 @@ paths:
           description: Caller lacks permission to grant KYC edits
         "404":
           description: User not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/kyc-approvals/pending:
     get:
+      operationId: listPendingKycActions
       summary: List pending KYC approvals/edit-access requests
       description: >-
         Feeds the dashboard's Pending Approvals widget, sidebar badge, and
@@ -547,9 +724,13 @@ paths:
         request awaiting grant. A caller with neither permission gets an
         empty list rather than a 403, since this is called unconditionally
         by every logged-in user's dashboard.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Employee]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Pending KYC actions fetched
@@ -576,3 +757,13 @@ paths:
                         summary: { type: string }
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"

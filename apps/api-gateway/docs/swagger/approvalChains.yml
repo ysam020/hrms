@@ -1,6 +1,7 @@
 paths:
   /api/v1/approval-chains:
     get:
+      operationId: listApprovalChains
       summary: List configured approval chains
       description: >
         Returns the tenant's configured `ApprovalChain` rows (optionally
@@ -9,8 +10,13 @@ paths:
         elsewhere (a single step resolved to the requester's reporting
         manager, falling back to any owner/admin). Requires only
         `authenticate` (any tenant member may view).
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Approval Chains]
-      security: [{ bearerAuth: [] }]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - in: query
           name: module
@@ -41,15 +47,32 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
     post:
+      operationId: createApprovalChain
       summary: Create an approval chain
       description: >
         Creates an `ApprovalChain` plus its ordered `ApprovalChainStep` rows
         (order derived from array position). Restricted to `owner`/`admin`
         roles or superusers (`isPrivileged`, checked in-handler).
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Approval Chains]
-      security: [{ bearerAuth: [] }]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -104,21 +127,39 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant, or not an owner/admin/superuser
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/approval-chains/{id}:
     put:
+      operationId: updateApprovalChain
       summary: Update an approval chain
       description: >
         Partially updates an `ApprovalChain`'s fields; if `steps` is
         provided, all existing steps are replaced. Restricted to
         `owner`/`admin` roles or superusers.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Approval Chains]
-      security: [{ bearerAuth: [] }]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - in: path
           name: id
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: false
         content:
@@ -158,21 +199,39 @@ paths:
           description: No active tenant, or not an owner/admin/superuser
         "404":
           description: Approval chain not found
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
     delete:
+      operationId: deleteApprovalChain
       summary: Delete an approval chain
       description: >
         Deletes the chain and its steps. Rejected if any
         `ApprovalInstance` against this chain is still `pending` —
         deactivate the chain instead, or wait for those to resolve.
         Restricted to `owner`/`admin` roles or superusers.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Approval Chains]
-      security: [{ bearerAuth: [] }]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - in: path
           name: id
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Chain deleted
@@ -191,16 +250,30 @@ paths:
           description: No active tenant, or not an owner/admin/superuser
         "404":
           description: Approval chain not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/approval-delegates:
     get:
+      operationId: listApprovalDelegates
       summary: List approval delegates
       description: >
         Returns all `ApprovalDelegate` rows for the tenant (date-ranged
         proxy-approver assignments), newest `startDate` first. Requires only
         `authenticate`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Approval Chains]
-      security: [{ bearerAuth: [] }]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: List of delegates
@@ -218,8 +291,17 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
     post:
+      operationId: createApprovalDelegate
       summary: Add a date-ranged delegate for your own approvals
       description: >
         Creates an `ApprovalDelegate` row delegating the **caller's own**
@@ -227,8 +309,16 @@ paths:
         there is no way to delegate on another user's behalf through this
         endpoint) to `delegateId` for the given date range, optionally
         scoped to one `module`. Requires only `authenticate`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Approval Chains]
-      security: [{ bearerAuth: [] }]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -272,21 +362,37 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/approval-delegates/{id}:
     delete:
+      operationId: deleteApprovalDelegate
       summary: Remove a delegate assignment
       description: >
         Deletes an `ApprovalDelegate` row. Callers may remove their own
         delegate assignments (`delegatorId === callerId`); removing someone
         else's requires `owner`/`admin` role or superuser.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Approval Chains]
-      security: [{ bearerAuth: [] }]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - in: path
           name: id
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: Delegate removed
@@ -303,9 +409,18 @@ paths:
           description: No active tenant, or not the delegator/owner/admin/superuser
         "404":
           description: Delegate not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/approvals/pending:
     get:
+      operationId: listPendingApprovals
       summary: List approvals awaiting the current user's decision
       description: >
         Returns pending `ApprovalInstance` steps resolved to the
@@ -314,8 +429,13 @@ paths:
         module-specific `detail` fields for the inbox UI. Requires only
         `authenticate`. Also folded into the aggregated
         `GET /approvals/pending-all`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Approval Chains]
-      security: [{ bearerAuth: [] }]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: List of pending approval steps
@@ -349,9 +469,18 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/approvals/pending-all:
     get:
+      operationId: listAllPendingActions
       summary: List every pending action across all approval surfaces
       description: >
         Single aggregated source for every "Pending Approvals" surface
@@ -365,8 +494,13 @@ paths:
         failing independently degrades to an empty list for that source
         rather than failing the whole response. Requires only
         `authenticate`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Approval Chains]
-      security: [{ bearerAuth: [] }]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Combined list of pending action items, newest first
@@ -387,9 +521,20 @@ paths:
                         requestedByName/createdAt/summary.
         "401":
           description: Unauthorized
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/approvals/{instanceId}/act:
     put:
+      operationId: actOnApproval
       summary: Approve or reject the current step of an approval
       description: >
         Records a decision on the current pending step of an
@@ -400,13 +545,20 @@ paths:
         revision). Owners/admins/superusers may act on any pending approval
         regardless of who it's resolved to (`allowOverride`). Requires only
         `authenticate`.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Approval Chains]
-      security: [{ bearerAuth: [] }]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - in: path
           name: instanceId
           required: true
           schema: { type: string }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -454,6 +606,14 @@ paths:
           description: No active tenant
         "404":
           description: Approval instance not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
 components:
   schemas:

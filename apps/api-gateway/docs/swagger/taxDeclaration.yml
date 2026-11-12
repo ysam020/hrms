@@ -1,14 +1,19 @@
 paths:
   /api/v1/tax-declarations/mine:
     get:
+      operationId: getMyDeclaration
       summary: Get the caller's own Old Regime tax declaration
       description: >-
         Returns the authenticated employee's tax declaration for the given
         financial year (defaults to the current financial year, Apr–Mar).
         Returns `{ status: null, financialYear }` if none exists yet.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Tax Declaration]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: financialYear
           in: query
@@ -44,9 +49,18 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant on the caller's session
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/tax-declarations/draft:
     post:
+      operationId: saveDraftDeclaration
       summary: Save (create or edit) a draft tax declaration
       description: >-
         Self-service only. Creates the caller's declaration for the given
@@ -54,9 +68,16 @@ paths:
         edits it while still in an editable status (Draft or
         RevisionRequested) — does not advance the status. Editing after
         Submitted/Declared/etc. is rejected.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Tax Declaration]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -109,17 +130,33 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant on the caller's session
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/tax-declarations/submit:
     post:
+      operationId: submitDeclaration
       summary: Submit the caller's tax declaration for HR review
       description: >-
         Self-service only. Advances a Draft or RevisionRequested declaration
         to Submitted, clearing any prior revision notes. A draft must exist
         first.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Tax Declaration]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         content:
           application/json:
@@ -154,9 +191,18 @@ paths:
           description: No active tenant on the caller's session
         "404":
           description: No draft exists yet — save one before submitting
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/tax-declarations/proofs:
     post:
+      operationId: submitDeclarationProofs
       summary: Submit proof documents for a Declared tax declaration
       description: >-
         Self-service only. Advances a Declared or ProofRevisionRequested
@@ -164,9 +210,16 @@ paths:
         map merged into the existing lineItems by code; proof document files
         themselves are uploaded via the generic file-upload endpoint and
         their URLs included as part of lineItems separately.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Tax Declaration]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -207,18 +260,31 @@ paths:
           description: No active tenant on the caller's session
         "404":
           description: No declaration found for that financial year
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/tax-declarations:
     get:
+      operationId: listDeclarations
       summary: List tax declarations for HR review
       description: >-
         Returns all employees' declarations for a financial year (defaults to
         current), optionally filtered by status, paginated and enriched with
         employee username/name. Restricted to HR/owner/admin/superuser or a
         holder of the TaxDeclaration:review_declaration:all permission.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Tax Declaration]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: financialYear
           in: query
@@ -270,9 +336,18 @@ paths:
           description: >-
             Forbidden — requires HR/owner/admin/superuser or the
             TaxDeclaration:review_declaration:all permission
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/tax-declarations/pending:
     get:
+      operationId: getPendingDeclarationActions
       summary: Get pending declaration/proof review items
       description: >-
         Feeds HR's review queue — declarations awaiting the declare-stage
@@ -282,9 +357,13 @@ paths:
         review_declaration or review_proofs. Returns an empty list for
         whichever stage the caller can't act on rather than 403ing the whole
         request.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Tax Declaration]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Pending review items retrieved
@@ -311,18 +390,34 @@ paths:
           description: Unauthorized
         "403":
           description: No active tenant on the caller's session
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/tax-declarations/review:
     post:
+      operationId: reviewDeclaration
       summary: Approve or request revision of a submitted declaration
       description: >-
         HR action. Moves a Submitted declaration to Declared, or to
         RevisionRequested with per-field notes. Restricted to HR/owner/admin/
         superuser or a holder of the TaxDeclaration:review_declaration:all
         permission.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Tax Declaration]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -362,18 +457,34 @@ paths:
             TaxDeclaration:review_declaration:all permission
         "404":
           description: Declaration not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/tax-declarations/review-proofs:
     post:
+      operationId: reviewDeclarationProofs
       summary: Verify or request revision of submitted proofs
       description: >-
         HR action. Moves a ProofsSubmitted declaration to Verified, or to
         ProofRevisionRequested with per-field notes. Restricted to HR/owner/
         admin/superuser or a holder of the TaxDeclaration:review_proofs:all
         permission.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Tax Declaration]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -416,9 +527,18 @@ paths:
             TaxDeclaration:review_proofs:all permission
         "404":
           description: Declaration not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/tax-declarations/{userId}:
     get:
+      operationId: getDeclarationForReview
       summary: Get one employee's declaration for HR review
       description: >-
         HR detail/review view for a single employee's declaration in the
@@ -426,9 +546,13 @@ paths:
         holding either review_declaration or review_proofs permission (or
         HR/owner/admin/superuser). Registered last among GET routes so it
         doesn't shadow the literal /mine and /pending paths above it.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Tax Declaration]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: userId
           in: path
@@ -457,3 +581,11 @@ paths:
             review_declaration/review_proofs permission
         "404":
           description: No declaration found for that financial year
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"

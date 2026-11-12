@@ -1,6 +1,7 @@
 paths:
   /api/v1/update-salary:
     post:
+      operationId: updateSalary
       summary: Create or update an employee's salary structure
       description: >-
         Creates the SalaryStructure row for a given userId/year/month if none
@@ -15,9 +16,16 @@ paths:
         owner/admin/hr (tenantRole), superusers, or a user holding the
         `SalaryManagement:update_salary` permission. Busts the cached
         employee-details payload for the tenant on success.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Salary]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -93,17 +101,32 @@ paths:
           description: >-
             Forbidden — caller is not owner/admin/hr/superuser and lacks the
             SalaryManagement:update_salary permission
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/get-user-salary/{userId}/{year}/{month}:
     get:
+      operationId: getUserSalary
       summary: Get an employee's salary structure for a month
       description: >-
         Returns the raw SalaryStructure for the given userId/year/month. A
         non-superuser may only fetch their own salary — requesting another
         user's returns 403.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Salary]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: userId
           in: path
@@ -135,9 +158,18 @@ paths:
           description: Unauthorized
         "403":
           description: Forbidden — may only view your own salary unless superuser
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/generate-salary-slip/{userId}/{year}/{month}:
     get:
+      operationId: generateSalarySlip
       summary: Generate a payslip PDF
       description: >-
         Builds and downloads a password-protected payslip PDF for the given
@@ -149,9 +181,13 @@ paths:
         actual disbursed PayrollLineItem amounts are used instead of a
         recomputed preview. A non-superuser may only generate their own
         payslip.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Salary]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: userId
           in: path
@@ -185,9 +221,18 @@ paths:
           description: Forbidden — may only generate your own payslip unless superuser
         "404":
           description: No salary data found for the selected period
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/generate-tds-worksheet/{userId}/{year}/{month}:
     get:
+      operationId: generateTdsWorksheet
       summary: Generate a TDS worksheet PDF
       description: >-
         Builds and downloads a password-protected, month-wise income-tax (TDS)
@@ -198,9 +243,13 @@ paths:
         employee has an approved Old Regime tax declaration for the financial
         year. Same PAN+DOB PDF password scheme as the payslip. A non-superuser
         may only generate their own worksheet.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Salary]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: userId
           in: path
@@ -234,17 +283,33 @@ paths:
           description: Forbidden — may only generate your own worksheet unless superuser
         "404":
           description: No salary data found for the selected period
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/email-salary-slip:
     post:
+      operationId: emailSalarySlip
       summary: Email a payslip on demand
       description: >-
         Builds the same payslip PDF as the download endpoint and emails it as
         an attachment to the employee's address on file. A non-superuser may
         only email their own payslip.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Salary]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -276,17 +341,33 @@ paths:
           description: Forbidden — may only email your own payslip unless superuser
         "404":
           description: No salary data found for the selected period
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/email-tds-worksheet:
     post:
+      operationId: emailTdsWorksheet
       summary: Email a TDS worksheet on demand
       description: >-
         Builds the same TDS worksheet PDF as the download endpoint and emails
         it as an attachment to the employee's address on file. A non-superuser
         may only email their own worksheet.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Salary]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -318,9 +399,18 @@ paths:
           description: Forbidden — may only email your own worksheet unless superuser
         "404":
           description: No salary data found for the selected period
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/generate-form16/{userId}/{financialYear}:
     get:
+      operationId: generateForm16
       summary: Generate a Form 16 (Part B) PDF
       description: >-
         Builds and downloads a password-protected Form 16 Part B PDF covering
@@ -330,9 +420,13 @@ paths:
         finalized so far. `financialYear` must look like "2026-27". Same
         PAN+DOB PDF password scheme as the payslip/worksheet. A non-superuser
         may only generate their own Form 16.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription).
       tags: [Salary]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: userId
           in: path
@@ -362,3 +456,11 @@ paths:
           description: >-
             Employee not found, or no finalized payroll runs/payslips exist
             for this employee in the given financial year
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"

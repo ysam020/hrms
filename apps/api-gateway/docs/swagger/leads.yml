@@ -1,0 +1,529 @@
+# Sales leads.
+#   POST /api/v1/public/leads       routes/publicLeads.ts — anonymous website form,
+#                                   leadWriteLimiter: 5 POSTs per IP per hour.
+#   /api/v1/platform/admin/leads/*  routes/platformAdmin.ts — Platform Console,
+#                                   PraestoAdmin:view_leads / manage_leads.
+# Handlers: handlers/leads.ts. Unexpected failures: 500 "Something went wrong. Try again."
+components:
+  schemas:
+    LeadStatus:
+      type: string
+      enum:
+        [
+          new,
+          contacted,
+          qualified,
+          demo_scheduled,
+          negotiation,
+          converted,
+          lost,
+        ]
+    LeadKind:
+      type: string
+      enum: [demo, sales, custom]
+    LeadSummary:
+      type: object
+      properties:
+        id: { type: string }
+        kind: { $ref: "#/components/schemas/LeadKind" }
+        name: { type: string, example: "Priya Sharma" }
+        companyName: { type: string, example: "Example Logistics" }
+        companySize: { type: string, example: "26–100" }
+        status: { $ref: "#/components/schemas/LeadStatus" }
+        channel:
+          { type: string, description: Derived from UTM source / referrer. }
+        ownerId: { type: string, nullable: true }
+        ownerName: { type: string, nullable: true }
+        submissionCount: { type: integer }
+        lastContactedAt: { type: string, format: date-time, nullable: true }
+        nextFollowUpAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+    LeadDetail:
+      type: object
+      description: >-
+        The stored lead record plus channel, ownerName and notes (newest first,
+        each with authorName; system notes from repeat submissions are
+        authored by "Website form").
+      additionalProperties: true
+      properties:
+        id: { type: string }
+        kind: { $ref: "#/components/schemas/LeadKind" }
+        name: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string, nullable: true }
+        companyName: { type: string }
+        companySize: { type: string }
+        designation: { type: string, nullable: true }
+        message: { type: string, nullable: true }
+        preferredDate: { type: string, nullable: true }
+        preferredTime: { type: string, nullable: true }
+        status: { $ref: "#/components/schemas/LeadStatus" }
+        ownerId: { type: string, nullable: true }
+        ownerName: { type: string, nullable: true }
+        channel: { type: string }
+        notes:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              authorId: { type: string, nullable: true }
+              authorName: { type: string }
+              body: { type: string }
+              createdAt: { type: string, format: date-time }
+    LeadDetailResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data: { $ref: "#/components/schemas/LeadDetail" }
+  parameters:
+    LeadId:
+      name: leadId
+      in: path
+      required: true
+      description: 24-hex id; a malformed id is reported as 404.
+      schema: { type: string, pattern: "^[a-f0-9]{24}$" }
+
+paths:
+  /api/v1/public/leads:
+    post:
+      operationId: submitPublicLead
+      summary: Submit a demo / sales / custom-plan enquiry
+      description: >-
+        Anonymous website form (Book a demo, Contact sales). Always answers
+        201 with the same message once validation passes, including for
+        honeypot submissions (non-empty `website`), a concurrent duplicate,
+        or a repeat from an address with an open lead (which is appended to
+        that lead instead of creating a new one), so the response never
+        reveals whether an address is known. Rate limited to 5 submissions
+        per IP per hour. Mutations still need the CSRF token.
+
+
+        Access: public — no authentication.
+      tags: [Website Leads]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [kind, name, email, companyName, companySize, consent]
+              properties:
+                kind: { $ref: "#/components/schemas/LeadKind" }
+                name: { type: string, minLength: 2, maxLength: 100 }
+                email: { type: string, format: email, maxLength: 254 }
+                phone:
+                  {
+                    type: string,
+                    maxLength: 20,
+                    description: Must parse as a valid phone number.,
+                  }
+                companyName: { type: string, minLength: 2, maxLength: 150 }
+                companySize:
+                  { type: string, enum: ["1–25", "26–100", "More than 100"] }
+                designation: { type: string, maxLength: 100 }
+                message: { type: string, maxLength: 2000 }
+                preferredDate:
+                  type: string
+                  pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+                  description: Demo requests only; today (IST) or later.
+                preferredTime:
+                  {
+                    type: string,
+                    enum: [morning, afternoon, evening],
+                    description: Demo requests only.,
+                  }
+                consent: { type: boolean, enum: [true] }
+                attribution:
+                  type: object
+                  description: UTM / referrer values captured by the site.
+                  additionalProperties: { type: string, maxLength: 500 }
+                website:
+                  type: string
+                  maxLength: 500
+                  description: Honeypot. Leave empty; a value silently discards the submission.
+            example:
+              kind: demo
+              name: "Priya Sharma"
+              email: "priya@example.com"
+              phone: "98765 43210"
+              companyName: "Example Logistics"
+              companySize: "26–100"
+              preferredDate: "2026-11-20"
+              preferredTime: morning
+              consent: true
+              attribution: { utm_source: "linkedin" }
+      responses:
+        "201":
+          description: Received
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessMessage" }
+              example:
+                success: true
+                message: "Thank you. We’ve received your request and will be in touch."
+        "400":
+          description: Validation error, invalid phone number, or a preferred date in the past
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/v1/platform/admin/leads:
+    get:
+      operationId: listLeads
+      summary: List leads
+      description: >-
+        Requires PraestoAdmin:view_leads. Newest first, with per-status counts for the filtered set.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); PraestoAdmin:view_leads (Praesto's own organisation only).
+      tags: [Platform Console]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PlatformPage"
+        - $ref: "#/components/parameters/PlatformLimit"
+        - name: search
+          in: query
+          description: Name, company or email contains.
+          schema: { type: string, maxLength: 100 }
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/LeadStatus" }
+        - name: kind
+          in: query
+          schema: { $ref: "#/components/schemas/LeadKind" }
+        - name: owner
+          in: query
+          description: '"me", "none" or an owner user id.'
+          schema: { type: string }
+        - $ref: "#/components/parameters/PlatformFrom"
+        - $ref: "#/components/parameters/PlatformTo"
+      responses:
+        "200":
+          description: One page of leads
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      leads:
+                        {
+                          type: array,
+                          items: { $ref: "#/components/schemas/LeadSummary" },
+                        }
+                      total: { type: integer }
+                      page: { type: integer }
+                      limit: { type: integer }
+                      counts:
+                        type: object
+                        description: Per-status counts plus total.
+                        additionalProperties: { type: integer }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/platform/admin/leads/metrics:
+    get:
+      operationId: getLeadMetrics
+      summary: Lead funnel metrics
+      description: >-
+        Requires view_leads. For leads created in the range: totals by stage
+        reached, by kind and by channel, and conversion rates between stages.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); PraestoAdmin:view_leads (Praesto's own organisation only).
+      tags: [Platform Console]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PlatformRange"
+        - $ref: "#/components/parameters/PlatformFrom"
+        - $ref: "#/components/parameters/PlatformTo"
+      responses:
+        "200":
+          description: Funnel
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      range:
+                        type: object
+                        properties:
+                          from: { type: string, format: date-time }
+                          to: { type: string, format: date-time }
+                      totals:
+                        type: object
+                        properties:
+                          leads: { type: integer }
+                          qualified: { type: integer }
+                          demos: { type: integer }
+                          converted: { type: integer }
+                      kinds:
+                        {
+                          type: object,
+                          description: The same counts per lead kind.,
+                        }
+                      rates:
+                        type: object
+                        properties:
+                          leadToQualified: { type: number, nullable: true }
+                          leadToDemo: { type: number, nullable: true }
+                          demoToCustomer: { type: number, nullable: true }
+                          leadToCustomer: { type: number, nullable: true }
+                      channels:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            channel: { type: string }
+                            leads: { type: integer }
+                            qualified: { type: integer }
+                            demos: { type: integer }
+                            converted: { type: integer }
+                            conversionRate: { type: number, nullable: true }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/platform/admin/leads/owners:
+    get:
+      operationId: listLeadOwners
+      summary: People leads can be assigned to
+      description: >-
+        Requires view_leads. Holders of PraestoAdmin:manage_leads, sorted by name.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); PraestoAdmin:view_leads (Praesto's own organisation only).
+      tags: [Platform Console]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Owners
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      owners:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: string }
+                            name: { type: string }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/platform/admin/leads/{leadId}:
+    get:
+      operationId: getLead
+      summary: Get a lead
+      description: >-
+        Requires view_leads.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); PraestoAdmin:view_leads (Praesto's own organisation only).
+      tags: [Platform Console]
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/LeadId"
+      responses:
+        "200":
+          description: Lead detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LeadDetailResponse" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Lead not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+    patch:
+      operationId: updateLead
+      summary: Update a lead's status, owner or follow-up dates
+      description: >-
+        Requires manage_leads. Stage timestamps are recorded the first time a
+        status is reached. Audited as lead_update. If nothing changes, the
+        current lead is returned without an audit entry.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); PraestoAdmin:manage_leads (Praesto's own organisation only).
+      tags: [Platform Console]
+      parameters:
+        - $ref: "#/components/parameters/LeadId"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                status: { $ref: "#/components/schemas/LeadStatus" }
+                ownerId:
+                  type: string
+                  nullable: true
+                  pattern: "^[a-f0-9]{24}$"
+                  description: Must hold manage_leads; null unassigns.
+                lastContactedAt:
+                  { type: string, format: date-time, nullable: true }
+                nextFollowUpAt:
+                  { type: string, format: date-time, nullable: true }
+            example:
+              {
+                status: demo_scheduled,
+                nextFollowUpAt: "2026-11-20T05:30:00.000Z",
+              }
+      responses:
+        "200":
+          description: Updated lead
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LeadDetailResponse" }
+        "400":
+          description: Validation error or the new owner can't manage leads
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Lead not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
+
+  /api/v1/platform/admin/leads/{leadId}/notes:
+    post:
+      operationId: addLeadNote
+      summary: Add a note to a lead
+      description: >-
+        Requires manage_leads. Audited as lead_note.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); PraestoAdmin:manage_leads (Praesto's own organisation only).
+      tags: [Platform Console]
+      parameters:
+        - $ref: "#/components/parameters/LeadId"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [body]
+              properties:
+                body: { type: string, minLength: 1, maxLength: 2000 }
+            example:
+              { body: "Called — wants a demo for 40 employees next week." }
+      responses:
+        "201":
+          description: Note added; the updated lead is returned
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LeadDetailResponse" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Lead not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "409":
+          description: This lead has reached the note limit
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"

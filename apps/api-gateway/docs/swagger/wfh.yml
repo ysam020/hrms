@@ -1,6 +1,7 @@
 paths:
   /api/v1/wfh/requests:
     post:
+      operationId: requestWfh
       summary: Request work from home
       description: >-
         Submits a WFH request for a single date, or an inclusive date range
@@ -13,9 +14,16 @@ paths:
         Approval Chain for the "wfh" module (defaults to the requester's
         reporting manager); HR and team leaders are notified in-app and by
         email.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); WFH must be enabled for the organisation (requireWfhEnabled).
       tags: [Work From Home]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -61,7 +69,16 @@ paths:
           description: WFH is disabled for this organisation, or no active tenant
         "409":
           description: Overlaps an existing leave application or WFH request
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
     get:
+      operationId: listWfhRequests
       summary: List WFH requests
       description: >-
         Approvers (owner/admin/HR/superuser, or anyone granted the
@@ -69,9 +86,13 @@ paths:
         by userId/status/date range/search (matched against employee name or
         username). Non-approvers always see only their own requests. Each
         result is enriched with the requesting employee's profile. Paginated.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); WFH must be enabled for the organisation (requireWfhEnabled).
       tags: [Work From Home]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: status
           in: query
@@ -119,9 +140,18 @@ paths:
           description: Unauthorized
         "403":
           description: WFH is disabled for this organisation, or no active tenant
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/wfh/requests/status:
     patch:
+      operationId: updateWfhStatus
       summary: Approve, reject, or cancel a WFH request
       description: >-
         Only a Pending request may be acted on. approve/reject route through
@@ -133,9 +163,16 @@ paths:
         application now overlaps the same date(s). cancel is self-service
         only — a requester may cancel their own request, which also cancels
         any still-pending approval instance.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); WFH must be enabled for the organisation (requireWfhEnabled).
       tags: [Work From Home]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -172,9 +209,18 @@ paths:
           description: Not the resolved approver and not privileged (or, for cancel, not the request's own owner); WFH disabled; or no active tenant
         "404":
           description: WFH request not found
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/wfh/requests/bulk-status:
     patch:
+      operationId: bulkUpdateWfhStatus
       summary: Bulk approve or reject WFH requests
       description: >-
         Approves or rejects up to 200 WFH requests in one call. cancel is
@@ -184,9 +230,16 @@ paths:
         so one already-decided or overlapping request doesn't fail the whole
         batch; per-id failures are returned in the response instead of
         aborting.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); WFH must be enabled for the organisation (requireWfhEnabled).
       tags: [Work From Home]
       security:
         - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -235,9 +288,20 @@ paths:
           description: Unauthorized
         "403":
           description: WFH is disabled for this organisation, or no active tenant
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
   /api/v1/wfh/calendar:
     get:
+      operationId: getWfhCalendar
       summary: Monthly WFH calendar
       description: >-
         Returns one entry per employee per WFH day (Approved requests only)
@@ -245,9 +309,13 @@ paths:
         spanning multiple days is expanded into one entry per day, clamped to
         the requested month. Approvers see the whole tenant; non-approvers
         see only their own days.
+
+
+        Access: authenticated (bearer token or `access_token` cookie); organisation required (requireTenant); active subscription (requireActiveSubscription); WFH must be enabled for the organisation (requireWfhEnabled).
       tags: [Work From Home]
       security:
         - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: year
           in: query
@@ -288,6 +356,14 @@ paths:
           description: Unauthorized
         "403":
           description: WFH is disabled for this organisation, or no active tenant
+        "402":
+          $ref: "#/components/responses/SubscriptionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/AuthCheckUnavailable"
 
 components:
   schemas:
