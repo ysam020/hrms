@@ -16,6 +16,7 @@
     "test": "jest && pnpm --filter web test:run",
     "test:coverage": "jest --coverage --forceExit && pnpm --filter web test:coverage",
     "test:staged": "jest --onlyChanged && pnpm --filter web exec vitest run --changed",
+    "test:integration": "cross-env NODE_OPTIONS=--experimental-vm-modules jest -c integration/jest.integration.config.cjs --runInBand",
     "start:prod": "turbo run start:prod",
     "lint": "eslint --no-config-lookup --config ./eslint.config.js \"**/*.{js,jsx,ts,tsx}\"",
     "proto:gen": "turbo run proto:gen",
