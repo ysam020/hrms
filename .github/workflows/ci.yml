@@ -10,11 +10,126 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Read-only token: these jobs only check code out and run tests.
+permissions:
+  contents: read
+
 env:
-  NODE_VERSION: "20"
-  PNPM_VERSION: "8.15.6"
+  # Matches the runtime images (docker/base.Dockerfile: node:24-alpine).
+  NODE_VERSION: "24"
 
 jobs:
+  # ── Static checks ──────────────────────────────────────────────────────────
+  lint-and-types:
+    name: Lint and type-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      # pnpm version comes from package.json "packageManager" (8.15.6).
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Install protoc (proto code generation)
+        run: sudo apt-get update -q && sudo apt-get install -yq protobuf-compiler
+      - name: Install dependencies (lockfile is authoritative)
+        run: pnpm install --frozen-lockfile
+      - name: Generate certificates and build shared packages
+        run: |
+          node scripts/generate-certs.mjs
+          pnpm exec turbo run build --filter='./packages/*'
+      # Errors fail the job; warnings are reported but don't.
+      - name: Lint
+        run: pnpm lint
+      - name: Type-check every app
+        run: |
+          for dir in apps/*/; do
+            if [ -f "$dir/tsconfig.json" ]; then
+              echo "::group::tsc $dir"
+              pnpm exec tsc -p "$dir/tsconfig.json" --noEmit
+              echo "::endgroup::"
+            fi
+          done
+
+  # ── Backend unit tests (Jest, all apps and packages) ────────────────────────
+  unit:
+    name: Unit tests (backend)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      # pnpm version comes from package.json "packageManager" (8.15.6).
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Install protoc (proto code generation)
+        run: sudo apt-get update -q && sudo apt-get install -yq protobuf-compiler
+      - name: Install dependencies (lockfile is authoritative)
+        run: pnpm install --frozen-lockfile
+      # Jest maps @hrms/* packages to their built dist.
+      - name: Generate certificates and build shared packages
+        run: |
+          node scripts/generate-certs.mjs
+          pnpm exec turbo run build --filter='./packages/*'
+      - name: Jest
+        run: pnpm exec jest --ci
+
+  # ── Web unit tests (Vitest) ─────────────────────────────────────────────────
+  web:
+    name: Unit tests (web)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      # pnpm version comes from package.json "packageManager" (8.15.6).
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Install protoc (proto code generation)
+        run: sudo apt-get update -q && sudo apt-get install -yq protobuf-compiler
+      - name: Install dependencies (lockfile is authoritative)
+        run: pnpm install --frozen-lockfile
+      - name: Vitest
+        run: pnpm --filter web test:run
+
+  # ── Integration: real MongoDB replica set, Redis and a KMS emulator ─────────
+  # Includes the tenant-isolation, payroll-disbursement, payout/webhook and
+  # payslip regression suites. Everything runs on this runner against
+  # containers bound to 127.0.0.1 (integration/up.sh); setupEnv.cjs refuses
+  # any non-local database or Redis host, and the payment-provider suites use
+  # a local fake that refuses any non-local fetch. No secrets are used.
+  integration:
+    name: Integration tests (tenant isolation, payroll money paths)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      # pnpm version comes from package.json "packageManager" (8.15.6).
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Install protoc (proto code generation)
+        run: sudo apt-get update -q && sudo apt-get install -yq protobuf-compiler
+      - name: Install dependencies (lockfile is authoritative)
+        run: pnpm install --frozen-lockfile
+      - name: Generate certificates and build shared packages
+        run: |
+          node scripts/generate-certs.mjs
+          pnpm exec turbo run build --filter='./packages/*'
+      - name: Start isolated MongoDB, Redis and KMS emulator
+        run: sh integration/up.sh
+      - name: Integration suites
+        run: pnpm test:integration --ci
+
+  # ── Container build (unchanged) ─────────────────────────────────────────────
   docker-build:
     name: Docker Compose build (docker-compose.ci.yml)
     runs-on: ubuntu-latest
